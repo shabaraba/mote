@@ -1,0 +1,18 @@
+# Rust build artifacts
+/target/
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+
+# Mote storage (when using location_strategy = "root")
+.mote/
+
+# Test files
+HANDOFF.md
