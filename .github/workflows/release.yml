@@ -148,10 +148,10 @@ jobs:
         run: |
           cd mote/homebrew-formula
           sed -i "s/version \".*\"/version \"${{ steps.version.outputs.version }}\"/g" mote.rb
-          sed -i "s/sha256 \"[0-9a-f]\{64\}\" # ARM64 macOS/sha256 \"${{ steps.sha.outputs.arm64_mac }}\" # ARM64 macOS/g" mote.rb
-          sed -i "s/sha256 \"[0-9a-f]\{64\}\" # x86_64 macOS/sha256 \"${{ steps.sha.outputs.x86_64_mac }}\" # x86_64 macOS/g" mote.rb
-          sed -i "s/sha256 \"[0-9a-f]\{64\}\" # ARM64 Linux/sha256 \"${{ steps.sha.outputs.arm64_linux }}\" # ARM64 Linux/g" mote.rb
-          sed -i "s/sha256 \"[0-9a-f]\{64\}\" # x86_64 Linux/sha256 \"${{ steps.sha.outputs.x86_64_linux }}\" # x86_64 Linux/g" mote.rb
+          sed -i "s|sha256 \"[0-9a-f]\{64\}\" # ARM64 macOS|sha256 \"${{ steps.sha.outputs.arm64_mac }}\" # ARM64 macOS|g" mote.rb
+          sed -i "s|sha256 \"[0-9a-f]\{64\}\" # x86_64 macOS|sha256 \"${{ steps.sha.outputs.x86_64_mac }}\" # x86_64 macOS|g" mote.rb
+          sed -i "s|sha256 \"[0-9a-f]\{64\}\" # ARM64 Linux|sha256 \"${{ steps.sha.outputs.arm64_linux }}\" # ARM64 Linux|g" mote.rb
+          sed -i "s|sha256 \"[0-9a-f]\{64\}\" # x86_64 Linux|sha256 \"${{ steps.sha.outputs.x86_64_linux }}\" # x86_64 Linux|g" mote.rb
 
       - name: Checkout tap repository
         uses: actions/checkout@v4
