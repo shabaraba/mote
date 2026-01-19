@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.2](https://github.com/shabaraba/mote/compare/v0.1.1...v0.1.2) (2026-01-19)
+
+
+### Bug Fixes
+
+* configure release workflows to trigger properly ([#5](https://github.com/shabaraba/mote/issues/5)) ([6857643](https://github.com/shabaraba/mote/commit/685764312ce9b1057b2f5f1bd9f8199abe3de309))
+* correct Homebrew formula URL pattern to include 'v' prefix ([#8](https://github.com/shabaraba/mote/issues/8)) ([90333fe](https://github.com/shabaraba/mote/commit/90333fe36a9cb852574a486cec4648e2a400df7c))
+* update SHA256 checksums to match actual v0.1.1 release assets ([#9](https://github.com/shabaraba/mote/issues/9)) ([a610680](https://github.com/shabaraba/mote/commit/a610680387f17bbfe72159e66eb991f7a5149c40))
+* use RELEASE_PLEASE_TOKEN for homebrew-tap access ([#7](https://github.com/shabaraba/mote/issues/7)) ([6f30a6b](https://github.com/shabaraba/mote/commit/6f30a6b9b457021d93f372aa9ba31e9ad53a5956))
+
 ## [0.1.1](https://github.com/shabaraba/mote/compare/v0.1.0...v0.1.1) (2026-01-19)
 
 
