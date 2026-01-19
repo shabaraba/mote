@@ -16,7 +16,9 @@ use cli::{Cli, Commands};
 use config::Config;
 use error::{MoteError, Result};
 use ignore::{create_default_moteignore, IgnoreFilter};
-use storage::{FileEntry, Index, IndexEntry, ObjectStore, Snapshot, SnapshotStore, StorageLocation};
+use storage::{
+    FileEntry, Index, IndexEntry, ObjectStore, Snapshot, SnapshotStore, StorageLocation,
+};
 
 /// Context holding common parameters passed to command functions.
 struct Context<'a> {
@@ -76,9 +78,11 @@ fn run() -> Result<()> {
 
     match cli.command {
         Commands::Init => cmd_init(&ctx),
-        Commands::Snapshot { message, trigger, auto } => {
-            cmd_snapshot(&ctx, message, trigger, auto)
-        }
+        Commands::Snapshot {
+            message,
+            trigger,
+            auto,
+        } => cmd_snapshot(&ctx, message, trigger, auto),
         Commands::SetupShell { shell } => cmd_setup_shell(&shell),
         Commands::Log { limit, oneline } => cmd_log(&ctx, limit, oneline),
         Commands::Show { snapshot_id } => cmd_show(&ctx, &snapshot_id),
@@ -88,14 +92,7 @@ fn run() -> Result<()> {
             name_only,
             output,
             unified,
-        } => cmd_diff(
-            &ctx,
-            snapshot_id,
-            snapshot_id2,
-            name_only,
-            output,
-            unified,
-        ),
+        } => cmd_diff(&ctx, snapshot_id, snapshot_id2, name_only, output, unified),
         Commands::Restore {
             snapshot_id,
             file,
@@ -144,7 +141,12 @@ fn collect_files(
         let metadata = match fs::metadata(path) {
             Ok(m) => m,
             Err(e) if !quiet => {
-                eprintln!("{}: Failed to read metadata for {}: {}", "warning".yellow(), relative_path, e);
+                eprintln!(
+                    "{}: Failed to read metadata for {}: {}",
+                    "warning".yellow(),
+                    relative_path,
+                    e
+                );
                 continue;
             }
             Err(_) => continue,
@@ -153,7 +155,12 @@ fn collect_files(
         let mtime = match metadata.modified() {
             Ok(t) => t,
             Err(e) if !quiet => {
-                eprintln!("{}: Failed to get mtime for {}: {}", "warning".yellow(), relative_path, e);
+                eprintln!(
+                    "{}: Failed to get mtime for {}: {}",
+                    "warning".yellow(),
+                    relative_path,
+                    e
+                );
                 continue;
             }
             Err(_) => continue,
@@ -231,11 +238,18 @@ fn cmd_snapshot(
         Err(_) if auto => return Ok(()),
         Err(e) => return Err(e),
     };
-    let object_store = ObjectStore::new(location.objects_dir(), ctx.config.storage.compression_level);
+    let object_store =
+        ObjectStore::new(location.objects_dir(), ctx.config.storage.compression_level);
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
 
     let mut index = Index::load(&location.index_path())?;
-    let files = collect_files(ctx.project_root, ctx.config, &object_store, &mut index, auto);
+    let files = collect_files(
+        ctx.project_root,
+        ctx.config,
+        &object_store,
+        &mut index,
+        auto,
+    );
     index.save(&location.index_path())?;
 
     if files.is_empty() {
@@ -401,7 +415,8 @@ fn cmd_diff(
         Err(e) => return Err(e),
     };
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
-    let object_store = ObjectStore::new(location.objects_dir(), ctx.config.storage.compression_level);
+    let object_store =
+        ObjectStore::new(location.objects_dir(), ctx.config.storage.compression_level);
 
     let snapshot_id = match snapshot_id {
         Some(id) => id,
@@ -528,7 +543,12 @@ fn diff_with_working_dir(
 ) -> Result<()> {
     use std::fmt::Write;
 
-    writeln!(output, "Comparing {} -> working directory", snapshot.short_id()).unwrap();
+    writeln!(
+        output,
+        "Comparing {} -> working directory",
+        snapshot.short_id()
+    )
+    .unwrap();
     writeln!(output).unwrap();
 
     let ignore_filter = IgnoreFilter::new(project_root, &config.ignore.ignore_file);
@@ -659,7 +679,11 @@ fn generate_unified_diff_with_content(
     writeln!(output, "--- a/{}", path).unwrap();
     writeln!(output, "+++ b/{}", path).unwrap();
 
-    for hunk in diff.unified_diff().context_radius(context_lines).iter_hunks() {
+    for hunk in diff
+        .unified_diff()
+        .context_radius(context_lines)
+        .iter_hunks()
+    {
         write!(output, "{}", hunk.header()).unwrap();
         for change in hunk.iter_changes() {
             let sign = match change.tag() {
@@ -693,11 +717,18 @@ fn cmd_restore(
         Err(e) => return Err(e),
     };
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
-    let object_store = ObjectStore::new(location.objects_dir(), ctx.config.storage.compression_level);
+    let object_store =
+        ObjectStore::new(location.objects_dir(), ctx.config.storage.compression_level);
     let snapshot = snapshot_store.find_by_id(snapshot_id)?;
 
     if let Some(ref file_path) = file {
-        restore_single_file(ctx.project_root, &snapshot, &object_store, file_path, dry_run)
+        restore_single_file(
+            ctx.project_root,
+            &snapshot,
+            &object_store,
+            file_path,
+            dry_run,
+        )
     } else {
         let mut index = Index::load(&location.index_path())?;
         let result = restore_all_files(
@@ -784,6 +815,7 @@ fn create_backup_snapshot(
 
 /// Restore all files from a snapshot.
 /// Creates backup unless force flag is set.
+#[allow(clippy::too_many_arguments)]
 fn restore_all_files(
     project_root: &Path,
     config: &Config,
@@ -795,11 +827,17 @@ fn restore_all_files(
     dry_run: bool,
 ) -> Result<()> {
     if !force && !dry_run {
-        create_backup_snapshot(project_root, config, object_store, snapshot_store, snapshot, index)?;
+        create_backup_snapshot(
+            project_root,
+            config,
+            object_store,
+            snapshot_store,
+            snapshot,
+            index,
+        )?;
     }
 
-    let (restored, skipped) =
-        restore_files(project_root, snapshot, object_store, force, dry_run)?;
+    let (restored, skipped) = restore_files(project_root, snapshot, object_store, force, dry_run)?;
 
     if dry_run {
         println!(

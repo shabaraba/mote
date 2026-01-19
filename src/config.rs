@@ -4,18 +4,13 @@ use std::path::PathBuf;
 
 use crate::error::{MoteError, Result};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum LocationStrategy {
+    #[default]
     Root,
     Vcs,
     Auto,
-}
-
-impl Default for LocationStrategy {
-    fn default() -> Self {
-        Self::Root
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,8 +109,8 @@ impl Config {
             return Ok(Self::default());
         }
 
-        let content = fs::read_to_string(&config_path)
-            .map_err(|e| MoteError::ConfigRead(e.to_string()))?;
+        let content =
+            fs::read_to_string(&config_path).map_err(|e| MoteError::ConfigRead(e.to_string()))?;
 
         let config: Config = toml::from_str(&content)?;
         Ok(config)

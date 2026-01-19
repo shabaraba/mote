@@ -29,7 +29,9 @@ mod systemtime_serde {
     where
         S: Serializer,
     {
-        let duration = time.duration_since(UNIX_EPOCH).map_err(serde::ser::Error::custom)?;
+        let duration = time
+            .duration_since(UNIX_EPOCH)
+            .map_err(serde::ser::Error::custom)?;
         let data = SystemTimeData {
             secs: duration.as_secs(),
             nanos: duration.subsec_nanos(),

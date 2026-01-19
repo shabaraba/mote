@@ -1,16 +1,31 @@
 # mote
 
-A fine-grained snapshot management tool for projects - like dust accumulates to become a mountain.
+[![Crates.io](https://img.shields.io/crates/v/mote.svg)](https://crates.io/crates/mote)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**mote**（微粒子）は、git commitより細かい粒度でプロジェクトのスナップショットを管理するCLIツールです。「塵も積もれば山となる」のコンセプトに基づき、小さな変更を積み重ねて履歴を形成します。
+> A git-agnostic snapshot manager that tracks changes independently of version control
 
-## Features
+**mote** (微粒子, meaning "fine particles") is a lightweight CLI tool for capturing and comparing project states. Unlike traditional VCS tools, mote operates independently—enabling you to **diff any two points in your project timeline**, regardless of git commits or staging area.
 
-- **Fine-grained snapshots**: Create snapshots more frequently than git commits
-- **Content-addressable storage**: Efficient deduplication using SHA256 + zstd compression
-- **Independent of git**: Works alongside git without conflicts
-- **Flexible storage location**: Store in `.mote/` or inside `.git/mote/` based on your preference
-- **Auto-backup on restore**: Automatically creates a backup before restoring
+## 🎯 The Core Advantage
+
+**Traditional VCS**: Only compare committed states
+**mote**: Compare ANY two snapshots, even across uncommitted changes
+
+This independence means you can:
+- Track experimental work without cluttering git history
+- Compare states before/after debugging sessions
+- Review changes across multiple git operations
+- Maintain parallel exploration without branches
+
+## ✨ Key Features
+
+- **🔄 Git/jj Independent**: Coexists peacefully with any VCS—no interference, no conflicts
+- **📸 Snapshot-Based Diffing**: Compare ANY two snapshots, regardless of commit/staging state
+- **⚡ Lightweight & Fast**: Content-addressable storage with SHA256 + zstd compression
+- **🎯 Flexible Comparison**: Diff between snapshots, working directory, or across VCS operations
+- **🗂️ Smart Storage**: `.mote/` or `.git/mote/`—your choice
+- **🛡️ Safe Restoration**: Auto-backup before restore operations
 
 ## Installation
 
@@ -25,6 +40,12 @@ brew install mote
 
 # Verify installation
 mote --version
+```
+
+### Cargo
+
+```bash
+cargo install mote
 ```
 
 ### From Source
@@ -67,9 +88,15 @@ mote restore <snapshot-id> --force
 ## Commands
 
 ### `mote init`
+
 Initialize mote in the current directory. Creates `.mote/` directory and `.moteignore` file.
 
+```bash
+mote init
+```
+
 ### `mote snapshot`
+
 Create a new snapshot of tracked files.
 
 ```bash
@@ -80,6 +107,7 @@ mote snapshot --auto                    # Auto mode (silent, skip if no changes)
 ```
 
 ### `mote setup-shell`
+
 Print shell integration script for git/jj auto-snapshot.
 
 ```bash
@@ -91,6 +119,7 @@ mote setup-shell zsh >> ~/.zshrc
 ```
 
 ### `mote log`
+
 Show snapshot history.
 
 ```bash
@@ -100,6 +129,7 @@ mote log --oneline      # Compact format
 ```
 
 ### `mote show`
+
 Show details of a specific snapshot.
 
 ```bash
@@ -107,6 +137,7 @@ mote show abc123d       # Use short ID
 ```
 
 ### `mote diff`
+
 Show differences between snapshots or working directory.
 
 ```bash
@@ -116,6 +147,7 @@ mote diff abc123d --content    # Show file content diff
 ```
 
 ### `mote restore`
+
 Restore files from a snapshot.
 
 ```bash
@@ -165,35 +197,69 @@ dist/
 .vscode/
 ```
 
-## Use Cases
+## 💡 Why mote?
+
+### The Fundamental Difference
+
+| Aspect | Traditional VCS | mote |
+|--------|----------------|------|
+| **Comparison Scope** | Only committed states | Any two snapshots |
+| **Staging Required** | Yes (git add) | No |
+| **Commit Required** | Yes | No |
+| **Branch Overhead** | Heavy | Lightweight |
+| **Parallel Exploration** | Branch management | Just take snapshots |
+
+### Perfect Use Cases
+
+**🧪 Experimental Development**
+```bash
+mote snapshot -m "baseline"
+# Try approach A
+mote snapshot -m "approach-a"
+# Try approach B
+mote snapshot -m "approach-b"
+mote diff approach-a approach-b  # Compare without any commits
+```
+
+**🐛 Debugging Sessions**
+```bash
+mote snapshot -m "before-debug"
+# Add logging, modify code, test...
+mote snapshot -m "after-debug"
+mote diff before-debug after-debug  # See exactly what changed
+```
+
+**📊 Cross-VCS Analysis**
+```bash
+git checkout feature-1    # → auto snapshot
+# work on feature-1
+git checkout feature-2    # → auto snapshot
+# work on feature-2
+mote diff <feature-1-snapshot> <feature-2-snapshot>  # Compare work across branches
+```
+
+## 🔗 Integration
 
 ### Git/jj Integration (Recommended)
 
-mote is designed to work alongside git or jj without conflicts. Using shell integration, you can automatically create snapshots when switching branches or performing other VCS operations.
+mote shines when integrated with your VCS workflow. Automatically capture snapshots on VCS operations:
 
 **Setup:**
 ```bash
-# Add to your shell config
 mote setup-shell zsh >> ~/.zshrc
 source ~/.zshrc
 ```
-
-**How it works:**
-- When you run `git checkout`, `git merge`, `jj edit`, etc., mote automatically takes a snapshot
-- The snapshot captures the state right after the VCS operation
-- You can then work freely, and take another snapshot before the next VCS operation
-- This gives you a diff of "what changed between VCS operations"
 
 **Supported commands:**
 - **git**: checkout, switch, merge, rebase, pull, stash, reset
 - **jj**: edit, new, abandon, rebase, squash, restore, undo
 
-**Example workflow:**
+**Workflow:**
 ```bash
 git checkout feature-branch    # → auto snapshot (state A)
 # ... make changes ...
 git checkout main              # → auto snapshot (state B)
-mote diff <A> <B>              # → see what you changed on feature-branch
+mote diff <A> <B>              # → diff across git operations
 ```
 
 ### Claude Code Hook Integration
@@ -230,6 +296,16 @@ require('vibing').setup({
     └── 20260119_002700_abc123.json
 ```
 
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
 ## License
 
-MIT
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Documentation
+
+- [Testing Guide](docs/testing/TESTING.md)
+- [Development Setup](docs/development/HOMEBREW_SETUP.md)
+- [Release Process](docs/development/RELEASE.md)
