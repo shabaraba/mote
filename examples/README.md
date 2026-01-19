@@ -41,7 +41,7 @@ mote snapshot -m "approach-1-using-hashmap"
 mote snapshot -m "approach-2-using-btree"
 
 # Compare the approaches
-mote diff approach-1 approach-2 --content
+mote diff approach-1 approach-2
 ```
 
 ### Integration with Git
@@ -73,7 +73,7 @@ vim src/main.rs
 mote snapshot -m "after-debug-session"
 
 # Review exactly what changed during debugging
-mote diff before-debug after-debug --content
+mote diff before-debug after-debug
 
 # If debug changes are good, keep them
 # If not, restore the original
@@ -108,12 +108,11 @@ mote snapshot -m "morning-state"
 mote snapshot -m "evening-state"
 
 # See what you accomplished today
-mote diff morning-state evening-state --content
+mote diff morning-state evening-state
 ```
 
 ## Tips
 
 - Use descriptive snapshot messages to make them easier to find later
 - Leverage `mote log` to browse your snapshot history
-- Use `--content` flag with diff for detailed line-by-line comparison
 - Remember: snapshots are independent of git commits—feel free to snapshot frequently!

@@ -6,7 +6,27 @@ We welcome contributions of all kinds: bug reports, feature requests, documentat
 
 ## Code of Conduct
 
-This project adheres to a Code of Conduct. By participating, you are expected to uphold this code. Please report unacceptable behavior to the project maintainers.
+This project is committed to providing a welcoming and inclusive environment for all contributors.
+
+### Expected Behavior
+
+- Be respectful and considerate in your communication
+- Welcome diverse perspectives and experiences
+- Accept constructive criticism gracefully
+- Focus on what is best for the community and project
+- Show empathy towards other community members
+
+### Unacceptable Behavior
+
+- Harassment, discrimination, or offensive comments
+- Personal attacks or trolling
+- Public or private harassment
+- Publishing others' private information without permission
+- Other conduct which could reasonably be considered inappropriate
+
+### Reporting
+
+If you experience or witness unacceptable behavior, please report it by opening an issue or contacting the project maintainers directly. All reports will be handled with discretion and confidentiality.
 
 ## How to Contribute
 

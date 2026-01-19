@@ -1,6 +1,5 @@
 # mote
 
-[![Crates.io](https://img.shields.io/crates/v/mote.svg)](https://crates.io/crates/mote)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > A git-agnostic snapshot manager that tracks changes independently of version control

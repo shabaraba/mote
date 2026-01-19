@@ -18,7 +18,7 @@
 | トリガー | Claude Codeのhook経由 + CLIコマンドとしても提供 |
 | git連携 | **独立管理**。gitとは別レイヤーで動作、競合しない |
 | 配布形態 | 独立CLI。vibing.nvimからは外部コマンドとして呼ぶ |
-| プロジェクト名 | small-git (ディレクトリ名より) |
+| プロジェクト名 | **mote** (微粒子) |
 
 ## 未決定事項（要相談・提案付き）
 
@@ -89,22 +89,21 @@
 
 ### 5. ツール名
 
-**候補（優先順）:**
+**最終決定: mote**
+
+プロジェクト名は **mote** (微粒子) に決定しました。
+
+#### 過去の候補（参考）
 1. **grain** - 粒（小さな単位）、覚えやすい
 2. **kizami** - 日本語「刻み」、細かい単位
 3. **tick** - 時間の最小単位
 4. **speck** - 微粒子
 
-**推奨: grain**
-- 短い、覚えやすい、タイプしやすい
-- 「細粒度」のコンセプトに合致
-- コマンド衝突リスク低い
-
 ## 想定アーキテクチャ（MVP版）
 
 ```
 プロジェクトルート/
-└── .grain/                    # ストレージディレクトリ
+└── .mote/                     # ストレージディレクトリ
     ├── config.toml            # 設定ファイル
     ├── objects/               # content-addressable storage
     │   ├── ab/
@@ -139,23 +138,23 @@
 
 ```bash
 # 初期化
-grain init
+mote init
 
 # スナップショット作成（hookから呼ばれる）
-grain snapshot [--message "optional"]
+mote snapshot [--message "optional"]
 
 # 履歴表示
-grain log [--limit 20] [--oneline]
+mote log [--limit 20] [--oneline]
 
 # 詳細表示
-grain show <snapshot-id>
+mote show <snapshot-id>
 
 # diff表示
-grain diff <snapshot-id-1> [snapshot-id-2]
+mote diff <snapshot-id-1> [snapshot-id-2]
 # snapshot-id-2省略時は現在のワーキングディレクトリとdiff
 
 # （将来）復元
-# grain restore <snapshot-id> [--file <path>]
+# mote restore <snapshot-id> [--file <path>]
 ```
 
 ## Claude Codeフック連携
@@ -166,8 +165,8 @@ grain diff <snapshot-id-1> [snapshot-id-2]
 {
   "hooks": {
     "after_tool": {
-      "Edit": "grain snapshot --message 'Auto: after Edit'",
-      "Write": "grain snapshot --message 'Auto: after Write'"
+      "Edit": "mote snapshot --message 'Auto: after Edit'",
+      "Write": "mote snapshot --message 'Auto: after Write'"
     }
   }
 }
@@ -179,7 +178,7 @@ grain diff <snapshot-id-1> [snapshot-id-2]
 -- vibing.nvim設定例
 require('vibing').setup({
   on_ai_edit = function()
-    vim.fn.system('grain snapshot --message "Auto: vibing.nvim edit"')
+    vim.fn.system('mote snapshot --message "Auto: vibing.nvim edit"')
   end
 })
 ```
@@ -251,12 +250,12 @@ colored = "2.1"           # 色付き出力
 
 1. **未決定事項の確認**
    - MVPスコープ確定（推奨: snapshot + log + diff）
-   - ツール名確定（推奨: grain）
+   - ツール名確定（**決定済: mote**）
    - 実装言語確定（推奨: Rust）
 
 2. **プロジェクト初期化**
    ```bash
-   cargo init --name grain
+   cargo init --name mote
    ```
 
 3. **基本構造実装**
