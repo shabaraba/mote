@@ -60,9 +60,17 @@ pub enum Commands {
         /// Second snapshot ID (optional, compares with current working directory if omitted)
         snapshot_id2: Option<String>,
 
-        /// Show file content diff
+        /// Show only file names without diff content
+        #[arg(long)]
+        name_only: bool,
+
+        /// Output diff to a file (.diff or .patch)
         #[arg(short, long)]
-        content: bool,
+        output: Option<String>,
+
+        /// Number of context lines (default: 3)
+        #[arg(short = 'U', long, default_value = "3")]
+        unified: usize,
     },
 
     /// Restore files from a snapshot

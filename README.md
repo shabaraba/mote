@@ -14,9 +14,33 @@ A fine-grained snapshot management tool for projects - like dust accumulates to 
 
 ## Installation
 
+### Homebrew (macOS / Linux)
+
 ```bash
+# Add tap
+brew tap shabaraba/tap
+
+# Install mote
+brew install mote
+
+# Verify installation
+mote --version
+```
+
+### From Source
+
+```bash
+# Clone repository
+git clone https://github.com/shabaraba/mote.git
+cd mote
+
+# Build and install
 cargo install --path .
 ```
+
+### Pre-built Binaries
+
+Download pre-built binaries from [GitHub Releases](https://github.com/shabaraba/mote/releases).
 
 ## Quick Start
 
@@ -208,4 +232,4 @@ require('vibing').setup({
 
 ## License
 
-MIT
+RIT

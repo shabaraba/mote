@@ -68,6 +68,10 @@ impl StorageLocation {
         self.root.join("snapshots")
     }
 
+    pub fn index_path(&self) -> PathBuf {
+        self.root.join("index")
+    }
+
     pub fn find_existing(project_root: &Path) -> Result<Self> {
         let mote_dir = project_root.join(".mote");
         if mote_dir.exists() {

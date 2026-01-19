@@ -5,16 +5,18 @@ mod ignore;
 mod storage;
 
 use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::path::Path;
 
 use clap::Parser;
 use colored::*;
+use similar::{ChangeTag, TextDiff};
 
 use cli::{Cli, Commands};
 use config::Config;
 use error::{MoteError, Result};
 use ignore::{create_default_moteignore, IgnoreFilter};
-use storage::{FileEntry, ObjectStore, Snapshot, SnapshotStore, StorageLocation};
+use storage::{FileEntry, Index, IndexEntry, ObjectStore, Snapshot, SnapshotStore, StorageLocation};
 
 fn main() {
     if let Err(e) = run() {
@@ -39,8 +41,18 @@ fn run() -> Result<()> {
         Commands::Diff {
             snapshot_id,
             snapshot_id2,
-            content,
-        } => cmd_diff(&project_root, &config, &snapshot_id, snapshot_id2, content),
+            name_only,
+            output,
+            unified,
+        } => cmd_diff(
+            &project_root,
+            &config,
+            &snapshot_id,
+            snapshot_id2,
+            name_only,
+            output,
+            unified,
+        ),
         Commands::Restore {
             snapshot_id,
             file,
@@ -68,6 +80,7 @@ fn collect_files(
     project_root: &Path,
     config: &Config,
     object_store: &ObjectStore,
+    index: &mut Index,
     quiet: bool,
 ) -> Vec<FileEntry> {
     let ignore_filter = IgnoreFilter::new(project_root, &config.ignore.ignore_file);
@@ -81,14 +94,53 @@ fn collect_files(
             .to_string_lossy()
             .to_string();
 
+        let metadata = match fs::metadata(path) {
+            Ok(m) => m,
+            Err(e) if !quiet => {
+                eprintln!("{}: Failed to read metadata for {}: {}", "warning".yellow(), relative_path, e);
+                continue;
+            }
+            Err(_) => continue,
+        };
+
+        let mtime = match metadata.modified() {
+            Ok(t) => t,
+            Err(e) if !quiet => {
+                eprintln!("{}: Failed to get mtime for {}: {}", "warning".yellow(), relative_path, e);
+                continue;
+            }
+            Err(_) => continue,
+        };
+
+        let size = metadata.len();
+
+        if let Some(cached_entry) = index.is_unchanged(&relative_path, mtime, size) {
+            files.push(FileEntry {
+                path: relative_path,
+                hash: cached_entry.hash.clone(),
+                size: cached_entry.size,
+                mode: None,
+            });
+            continue;
+        }
+
         match object_store.store_file(path) {
-            Ok((hash, size)) => {
-                files.push(FileEntry {
+            Ok((hash, file_size)) => {
+                let entry = FileEntry {
+                    path: relative_path.clone(),
+                    hash: hash.clone(),
+                    size: file_size,
+                    mode: None,
+                };
+
+                index.insert(IndexEntry {
                     path: relative_path,
                     hash,
-                    size,
-                    mode: None,
+                    size: file_size,
+                    mtime,
                 });
+
+                files.push(entry);
             }
             Err(e) if !quiet => {
                 eprintln!(
@@ -127,7 +179,9 @@ fn cmd_snapshot(
     let object_store = ObjectStore::new(location.objects_dir(), config.storage.compression_level);
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
 
-    let files = collect_files(project_root, config, &object_store, auto);
+    let mut index = Index::load(&location.index_path())?;
+    let files = collect_files(project_root, config, &object_store, &mut index, auto);
+    index.save(&location.index_path())?;
 
     if files.is_empty() {
         if !auto {
@@ -258,19 +312,47 @@ fn cmd_diff(
     config: &Config,
     snapshot_id: &str,
     snapshot_id2: Option<String>,
-    show_diff: bool,
+    name_only: bool,
+    output: Option<String>,
+    unified: usize,
 ) -> Result<()> {
     let location = StorageLocation::find_existing(project_root)?;
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
     let object_store = ObjectStore::new(location.objects_dir(), config.storage.compression_level);
     let snapshot1 = snapshot_store.find_by_id(snapshot_id)?;
 
+    let mut diff_output = String::new();
+
     if let Some(ref id2) = snapshot_id2 {
         let snapshot2 = snapshot_store.find_by_id(id2)?;
-        diff_snapshots(&snapshot1, &snapshot2, &object_store, show_diff)
+        diff_snapshots(
+            &snapshot1,
+            &snapshot2,
+            &object_store,
+            name_only,
+            unified,
+            &mut diff_output,
+        )?;
     } else {
-        diff_with_working_dir(project_root, config, &snapshot1, &object_store, show_diff)
+        diff_with_working_dir(
+            project_root,
+            config,
+            &snapshot1,
+            &object_store,
+            name_only,
+            unified,
+            &mut diff_output,
+        )?;
     }
+
+    if let Some(output_file) = output {
+        fs::write(&output_file, &diff_output)?;
+        println!("Diff written to {}", output_file.cyan());
+    } else {
+        print!("{}", diff_output);
+    }
+
+    Ok(())
 }
 
 fn files_to_map(files: &[FileEntry]) -> HashMap<&str, &FileEntry> {
@@ -281,14 +363,20 @@ fn diff_snapshots(
     snapshot1: &Snapshot,
     snapshot2: &Snapshot,
     object_store: &ObjectStore,
-    show_diff: bool,
+    name_only: bool,
+    unified: usize,
+    output: &mut String,
 ) -> Result<()> {
-    println!(
+    use std::fmt::Write;
+
+    writeln!(
+        output,
         "Comparing {} -> {}",
-        snapshot1.short_id().cyan(),
-        snapshot2.short_id().cyan()
-    );
-    println!();
+        snapshot1.short_id(),
+        snapshot2.short_id()
+    )
+    .unwrap();
+    writeln!(output).unwrap();
 
     let files1 = files_to_map(&snapshot1.files);
     let files2 = files_to_map(&snapshot2.files);
@@ -296,19 +384,34 @@ fn diff_snapshots(
     for (path, file2) in &files2 {
         if let Some(file1) = files1.get(path) {
             if file1.hash != file2.hash {
-                println!("{}: {}", "Modified".yellow(), path);
-                if show_diff {
-                    show_content_diff(object_store, &file1.hash, &file2.hash)?;
+                if name_only {
+                    writeln!(output, "M\t{}", path).unwrap();
+                } else {
+                    generate_unified_diff(
+                        object_store,
+                        path,
+                        &file1.hash,
+                        &file2.hash,
+                        unified,
+                        output,
+                    )?;
                 }
             }
+        } else if name_only {
+            writeln!(output, "A\t{}", path).unwrap();
         } else {
-            println!("{}:   {}", "Added".green(), path);
+            generate_unified_diff(object_store, path, "", &file2.hash, unified, output)?;
         }
     }
 
     for path in files1.keys() {
         if !files2.contains_key(path) {
-            println!("{}: {}", "Deleted".red(), path);
+            if name_only {
+                writeln!(output, "D\t{}", path).unwrap();
+            } else {
+                let file1 = files1.get(path).unwrap();
+                generate_unified_diff(object_store, path, &file1.hash, "", unified, output)?;
+            }
         }
     }
     Ok(())
@@ -319,13 +422,14 @@ fn diff_with_working_dir(
     config: &Config,
     snapshot: &Snapshot,
     object_store: &ObjectStore,
-    show_diff: bool,
+    name_only: bool,
+    unified: usize,
+    output: &mut String,
 ) -> Result<()> {
-    println!(
-        "Comparing {} -> working directory",
-        snapshot.short_id().cyan()
-    );
-    println!();
+    use std::fmt::Write;
+
+    writeln!(output, "Comparing {} -> working directory", snapshot.short_id()).unwrap();
+    writeln!(output).unwrap();
 
     let ignore_filter = IgnoreFilter::new(project_root, &config.ignore.ignore_file);
     let snapshot_files = files_to_map(&snapshot.files);
@@ -342,71 +446,120 @@ fn diff_with_working_dir(
         current_files.insert(relative_path.clone());
 
         if let Some(snapshot_file) = snapshot_files.get(relative_path.as_str()) {
-            let current_hash = ObjectStore::compute_hash(&std::fs::read(path)?);
+            let current_content = fs::read(path)?;
+            let current_hash = ObjectStore::compute_hash(&current_content);
             if current_hash != snapshot_file.hash {
-                println!("{}: {}", "Modified".yellow(), relative_path);
-                if show_diff {
-                    show_content_diff(object_store, &snapshot_file.hash, &current_hash)?;
+                if name_only {
+                    writeln!(output, "M\t{}", relative_path).unwrap();
+                } else {
+                    generate_unified_diff_with_content(
+                        object_store,
+                        &relative_path,
+                        &snapshot_file.hash,
+                        &current_content,
+                        unified,
+                        output,
+                    )?;
                 }
             }
+        } else if name_only {
+            writeln!(output, "A\t{}", relative_path).unwrap();
         } else {
-            println!("{}:   {}", "Added".green(), relative_path);
+            let current_content = fs::read(path)?;
+            generate_unified_diff_with_content(
+                object_store,
+                &relative_path,
+                "",
+                &current_content,
+                unified,
+                output,
+            )?;
         }
     }
 
     for path in snapshot_files.keys() {
         if !current_files.contains(*path) {
-            println!("{}: {}", "Deleted".red(), path);
+            if name_only {
+                writeln!(output, "D\t{}", path).unwrap();
+            } else {
+                let file = snapshot_files.get(path).unwrap();
+                generate_unified_diff_with_content(
+                    object_store,
+                    path,
+                    &file.hash,
+                    &[],
+                    unified,
+                    output,
+                )?;
+            }
         }
     }
     Ok(())
 }
 
-fn show_content_diff(object_store: &ObjectStore, hash1: &str, hash2: &str) -> Result<()> {
-    let content1 = object_store.retrieve(hash1)?;
-    let content2 = match object_store.retrieve(hash2) {
-        Ok(c) => c,
-        Err(MoteError::ObjectNotFound(_)) => return Ok(()),
-        Err(e) => return Err(e),
+fn generate_unified_diff(
+    object_store: &ObjectStore,
+    path: &str,
+    hash1: &str,
+    hash2: &str,
+    context_lines: usize,
+    output: &mut String,
+) -> Result<()> {
+    let content2 = if hash2.is_empty() {
+        Vec::new()
+    } else {
+        match object_store.retrieve(hash2) {
+            Ok(c) => c,
+            Err(MoteError::ObjectNotFound(_)) => return Ok(()),
+            Err(e) => return Err(e),
+        }
     };
 
-    let (Ok(text1), Ok(text2)) = (
-        String::from_utf8(content1),
-        String::from_utf8(content2),
-    ) else {
+    generate_unified_diff_with_content(object_store, path, hash1, &content2, context_lines, output)
+}
+
+fn generate_unified_diff_with_content(
+    object_store: &ObjectStore,
+    path: &str,
+    hash1: &str,
+    content2: &[u8],
+    context_lines: usize,
+    output: &mut String,
+) -> Result<()> {
+    use std::fmt::Write;
+
+    let content1 = if hash1.is_empty() {
+        Vec::new()
+    } else {
+        object_store.retrieve(hash1)?
+    };
+
+    let text1 = String::from_utf8_lossy(&content1);
+    let text2 = String::from_utf8_lossy(content2);
+
+    if text1.is_empty() && text2.is_empty() {
         return Ok(());
-    };
+    }
 
-    let lines1: Vec<_> = text1.lines().collect();
-    let lines2: Vec<_> = text2.lines().collect();
+    let diff = TextDiff::from_lines(&text1, &text2);
 
-    println!("  ---");
-    for (i, (l1, l2)) in lines1.iter().zip(lines2.iter()).enumerate() {
-        if l1 != l2 {
-            let ln = format!("{}:", i + 1).dimmed();
-            println!("  {} {} {}", ln, "-".red(), l1.red());
-            println!("  {} {} {}", ln, "+".green(), l2.green());
+    writeln!(output, "diff --mote a/{} b/{}", path, path).unwrap();
+    writeln!(output, "--- a/{}", path).unwrap();
+    writeln!(output, "+++ b/{}", path).unwrap();
+
+    for hunk in diff.unified_diff().context_radius(context_lines).iter_hunks() {
+        write!(output, "{}", hunk.header()).unwrap();
+        for change in hunk.iter_changes() {
+            let sign = match change.tag() {
+                ChangeTag::Delete => "-",
+                ChangeTag::Insert => "+",
+                ChangeTag::Equal => " ",
+            };
+            write!(output, "{}{}", sign, change.value()).unwrap();
         }
     }
 
-    for (i, line) in lines2.iter().enumerate().skip(lines1.len()) {
-        println!(
-            "  {} {} {}",
-            format!("{}:", i + 1).dimmed(),
-            "+".green(),
-            line.green()
-        );
-    }
-
-    for (i, line) in lines1.iter().enumerate().skip(lines2.len()) {
-        println!(
-            "  {} {} {}",
-            format!("{}:", i + 1).dimmed(),
-            "-".red(),
-            line.red()
-        );
-    }
-    println!("  ---");
+    writeln!(output).unwrap();
     Ok(())
 }
 
@@ -426,15 +579,21 @@ fn cmd_restore(
     if let Some(ref file_path) = file {
         restore_single_file(project_root, &snapshot, &object_store, file_path, dry_run)
     } else {
-        restore_all_files(
+        let mut index = Index::load(&location.index_path())?;
+        let result = restore_all_files(
             project_root,
             config,
             &snapshot,
             &object_store,
             &snapshot_store,
+            &mut index,
             force,
             dry_run,
-        )
+        );
+        if result.is_ok() {
+            index.save(&location.index_path())?;
+        }
+        result
     }
 }
 
@@ -475,8 +634,9 @@ fn create_backup_snapshot(
     object_store: &ObjectStore,
     snapshot_store: &SnapshotStore,
     target_snapshot: &Snapshot,
+    index: &mut Index,
 ) -> Result<()> {
-    let files = collect_files(project_root, config, object_store, true);
+    let files = collect_files(project_root, config, object_store, index, true);
     if files.is_empty() {
         return Ok(());
     }
@@ -504,11 +664,12 @@ fn restore_all_files(
     snapshot: &Snapshot,
     object_store: &ObjectStore,
     snapshot_store: &SnapshotStore,
+    index: &mut Index,
     force: bool,
     dry_run: bool,
 ) -> Result<()> {
     if !force && !dry_run {
-        create_backup_snapshot(project_root, config, object_store, snapshot_store, snapshot)?;
+        create_backup_snapshot(project_root, config, object_store, snapshot_store, snapshot, index)?;
     }
 
     let (restored, skipped) =
