@@ -47,7 +47,7 @@ fn run() -> Result<()> {
         } => cmd_diff(
             &project_root,
             &config,
-            &snapshot_id,
+            snapshot_id,
             snapshot_id2,
             name_only,
             output,
@@ -310,7 +310,7 @@ fn cmd_show(project_root: &Path, snapshot_id: &str) -> Result<()> {
 fn cmd_diff(
     project_root: &Path,
     config: &Config,
-    snapshot_id: &str,
+    snapshot_id: Option<String>,
     snapshot_id2: Option<String>,
     name_only: bool,
     output: Option<String>,
@@ -319,7 +319,19 @@ fn cmd_diff(
     let location = StorageLocation::find_existing(project_root)?;
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
     let object_store = ObjectStore::new(location.objects_dir(), config.storage.compression_level);
-    let snapshot1 = snapshot_store.find_by_id(snapshot_id)?;
+
+    let snapshot_id = match snapshot_id {
+        Some(id) => id,
+        None => {
+            let snapshots = snapshot_store.list()?;
+            if snapshots.is_empty() {
+                return Err(MoteError::ConfigRead("No snapshots found".to_string()));
+            }
+            snapshots.first().unwrap().id.clone()
+        }
+    };
+
+    let snapshot1 = snapshot_store.find_by_id(&snapshot_id)?;
 
     let mut diff_output = String::new();
 

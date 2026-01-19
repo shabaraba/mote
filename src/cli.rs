@@ -54,8 +54,8 @@ pub enum Commands {
 
     /// Show differences between snapshots or working directory
     Diff {
-        /// First snapshot ID
-        snapshot_id: String,
+        /// First snapshot ID (if omitted, uses latest snapshot)
+        snapshot_id: Option<String>,
 
         /// Second snapshot ID (optional, compares with current working directory if omitted)
         snapshot_id2: Option<String>,
