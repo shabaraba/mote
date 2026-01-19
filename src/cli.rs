@@ -22,6 +22,17 @@ pub enum Commands {
         /// Trigger source (e.g., "claude-code-hook", "manual")
         #[arg(short, long)]
         trigger: Option<String>,
+
+        /// Auto mode: skip if no changes, quiet output (for git/jj hooks)
+        #[arg(long)]
+        auto: bool,
+    },
+
+    /// Print shell integration script for git/jj auto-snapshot
+    SetupShell {
+        /// Shell type (bash, zsh, fish)
+        #[arg(default_value = "zsh")]
+        shell: String,
     },
 
     /// Show snapshot history
@@ -43,15 +54,23 @@ pub enum Commands {
 
     /// Show differences between snapshots or working directory
     Diff {
-        /// First snapshot ID
-        snapshot_id: String,
+        /// First snapshot ID (if omitted, uses latest snapshot)
+        snapshot_id: Option<String>,
 
         /// Second snapshot ID (optional, compares with current working directory if omitted)
         snapshot_id2: Option<String>,
 
-        /// Show file content diff
+        /// Show only file names without diff content
+        #[arg(long)]
+        name_only: bool,
+
+        /// Output diff to a file (.diff or .patch)
         #[arg(short, long)]
-        content: bool,
+        output: Option<String>,
+
+        /// Number of context lines (default: 3)
+        #[arg(short = 'U', long, default_value = "3")]
+        unified: usize,
     },
 
     /// Restore files from a snapshot
@@ -63,7 +82,7 @@ pub enum Commands {
         #[arg(short, long)]
         file: Option<String>,
 
-        /// Force restore without confirmation
+        /// Skip automatic backup creation before restore
         #[arg(long)]
         force: bool,
 

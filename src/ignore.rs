@@ -14,11 +14,8 @@ impl IgnoreFilter {
 
         let gitignore = if ignore_path.exists() {
             let mut builder = GitignoreBuilder::new(project_root);
-            if builder.add(&ignore_path).is_none() {
-                builder.build().ok()
-            } else {
-                None
-            }
+            let _ = builder.add(&ignore_path);
+            builder.build().ok()
         } else {
             None
         };
@@ -43,17 +40,19 @@ impl IgnoreFilter {
             .into_iter()
             .filter_entry(|entry| {
                 let path = entry.path();
-                !path.starts_with(&mote_dir)
-                    && !path.starts_with(&git_dir)
-                    && !path.starts_with(&jj_dir)
-            })
-            .filter_map(|e| e.ok())
-            .filter(|e| {
-                if !e.file_type().is_file() {
+
+                if path.starts_with(&mote_dir)
+                    || path.starts_with(&git_dir)
+                    || path.starts_with(&jj_dir)
+                {
                     return false;
                 }
-                !self.is_ignored(e.path(), false)
+
+                let relative_path = path.strip_prefix(project_root).unwrap_or(path);
+                !self.is_ignored(relative_path, entry.file_type().is_dir())
             })
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
             .collect()
     }
 }

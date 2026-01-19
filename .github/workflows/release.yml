@@ -1,0 +1,161 @@
+name: Build and Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            cross: false
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            cross: false
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            cross: false
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            cross: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools
+        if: matrix.cross
+        run: |
+          cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build
+        run: |
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            cross build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
+
+      - name: Package
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf mote-${{ github.event.release.tag_name }}-${{ matrix.target }}.tar.gz mote
+          mv mote-${{ github.event.release.tag_name }}-${{ matrix.target }}.tar.gz ../../../
+
+      - name: Calculate SHA256
+        id: sha
+        run: |
+          echo "sha256=$(shasum -a 256 mote-${{ github.event.release.tag_name }}-${{ matrix.target }}.tar.gz | awk '{print $1}')" >> $GITHUB_OUTPUT
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mote-${{ matrix.target }}
+          path: mote-${{ github.event.release.tag_name }}-${{ matrix.target }}.tar.gz
+
+      - name: Save SHA256
+        run: |
+          echo "${{ steps.sha.outputs.sha256 }}  mote-${{ github.event.release.tag_name }}-${{ matrix.target }}.tar.gz" > mote-${{ github.event.release.tag_name }}-${{ matrix.target }}.sha256
+
+      - name: Upload SHA256
+        uses: actions/upload-artifact@v4
+        with:
+          name: sha256-${{ matrix.target }}
+          path: mote-${{ github.event.release.tag_name }}-${{ matrix.target }}.sha256
+
+  upload-assets:
+    name: Upload Release Assets
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Display structure
+        run: ls -R
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            mote-*/mote-*.tar.gz
+            sha256-*/mote-*.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-formula:
+    name: Update Homebrew Formula
+    needs: upload-assets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout mote repository
+        uses: actions/checkout@v4
+        with:
+          path: mote
+
+      - name: Download SHA256 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: sha256s
+
+      - name: Extract SHA256 values
+        id: sha
+        run: |
+          ARM64_MAC=$(cat sha256s/sha256-aarch64-apple-darwin/*.sha256 | awk '{print $1}')
+          X86_64_MAC=$(cat sha256s/sha256-x86_64-apple-darwin/*.sha256 | awk '{print $1}')
+          X86_64_LINUX=$(cat sha256s/sha256-x86_64-unknown-linux-gnu/*.sha256 | awk '{print $1}')
+          ARM64_LINUX=$(cat sha256s/sha256-aarch64-unknown-linux-gnu/*.sha256 | awk '{print $1}')
+
+          echo "arm64_mac=$ARM64_MAC" >> $GITHUB_OUTPUT
+          echo "x86_64_mac=$X86_64_MAC" >> $GITHUB_OUTPUT
+          echo "x86_64_linux=$X86_64_LINUX" >> $GITHUB_OUTPUT
+          echo "arm64_linux=$ARM64_LINUX" >> $GITHUB_OUTPUT
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${{ github.event.release.tag_name }}
+          VERSION=${VERSION#v}  # Remove 'v' prefix if present
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update Formula
+        run: |
+          cd mote/homebrew-formula
+          sed -i "s/version \".*\"/version \"${{ steps.version.outputs.version }}\"/g" mote.rb
+          sed -i "s/sha256 \"[0-9a-f]\{64\}\" # ARM64 macOS/sha256 \"${{ steps.sha.outputs.arm64_mac }}\" # ARM64 macOS/g" mote.rb
+          sed -i "s/sha256 \"[0-9a-f]\{64\}\" # x86_64 macOS/sha256 \"${{ steps.sha.outputs.x86_64_mac }}\" # x86_64 macOS/g" mote.rb
+          sed -i "s/sha256 \"[0-9a-f]\{64\}\" # ARM64 Linux/sha256 \"${{ steps.sha.outputs.arm64_linux }}\" # ARM64 Linux/g" mote.rb
+          sed -i "s/sha256 \"[0-9a-f]\{64\}\" # x86_64 Linux/sha256 \"${{ steps.sha.outputs.x86_64_linux }}\" # x86_64 Linux/g" mote.rb
+
+      - name: Checkout tap repository
+        uses: actions/checkout@v4
+        with:
+          repository: shabaraba/homebrew-tap
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          path: tap
+
+      - name: Copy Formula to tap
+        run: |
+          cp mote/homebrew-formula/mote.rb tap/Formula/mote.rb
+
+      - name: Commit and push to tap
+        run: |
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/mote.rb
+          git commit -m "chore: update mote to ${{ github.event.release.tag_name }}"
+          git push

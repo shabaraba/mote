@@ -129,11 +129,6 @@ impl SnapshotStore {
         }
     }
 
-    pub fn latest(&self) -> Result<Option<Snapshot>> {
-        let snapshots = self.list()?;
-        Ok(snapshots.into_iter().next())
-    }
-
     pub fn cleanup(&self, max_snapshots: u32, max_age_days: u32) -> Result<u32> {
         let mut snapshots = self.list()?;
         let now = Utc::now();

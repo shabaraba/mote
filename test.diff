@@ -1,0 +1,11 @@
+Comparing a92eaf6 -> working directory
+
+diff --mote a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -232,4 +232,4 @@ 
+ ## License
+ 
+-RIT
++MIT
+

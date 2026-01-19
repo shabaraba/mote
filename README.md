@@ -14,9 +14,33 @@ A fine-grained snapshot management tool for projects - like dust accumulates to 
 
 ## Installation
 
+### Homebrew (macOS / Linux)
+
 ```bash
+# Add tap
+brew tap shabaraba/tap
+
+# Install mote
+brew install mote
+
+# Verify installation
+mote --version
+```
+
+### From Source
+
+```bash
+# Clone repository
+git clone https://github.com/shabaraba/mote.git
+cd mote
+
+# Build and install
 cargo install --path .
 ```
+
+### Pre-built Binaries
+
+Download pre-built binaries from [GitHub Releases](https://github.com/shabaraba/mote/releases).
 
 ## Quick Start
 
@@ -52,6 +76,18 @@ Create a new snapshot of tracked files.
 mote snapshot                           # Create snapshot
 mote snapshot -m "Description"          # With message
 mote snapshot --trigger "claude-hook"   # With trigger source
+mote snapshot --auto                    # Auto mode (silent, skip if no changes)
+```
+
+### `mote setup-shell`
+Print shell integration script for git/jj auto-snapshot.
+
+```bash
+mote setup-shell zsh    # For zsh/bash
+mote setup-shell fish   # For fish shell
+
+# Add to your shell config:
+mote setup-shell zsh >> ~/.zshrc
 ```
 
 ### `mote log`
@@ -130,6 +166,35 @@ dist/
 ```
 
 ## Use Cases
+
+### Git/jj Integration (Recommended)
+
+mote is designed to work alongside git or jj without conflicts. Using shell integration, you can automatically create snapshots when switching branches or performing other VCS operations.
+
+**Setup:**
+```bash
+# Add to your shell config
+mote setup-shell zsh >> ~/.zshrc
+source ~/.zshrc
+```
+
+**How it works:**
+- When you run `git checkout`, `git merge`, `jj edit`, etc., mote automatically takes a snapshot
+- The snapshot captures the state right after the VCS operation
+- You can then work freely, and take another snapshot before the next VCS operation
+- This gives you a diff of "what changed between VCS operations"
+
+**Supported commands:**
+- **git**: checkout, switch, merge, rebase, pull, stash, reset
+- **jj**: edit, new, abandon, rebase, squash, restore, undo
+
+**Example workflow:**
+```bash
+git checkout feature-branch    # → auto snapshot (state A)
+# ... make changes ...
+git checkout main              # → auto snapshot (state B)
+mote diff <A> <B>              # → see what you changed on feature-branch
+```
 
 ### Claude Code Hook Integration
 
