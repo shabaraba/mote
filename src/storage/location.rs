@@ -8,11 +8,6 @@ pub struct StorageLocation {
 }
 
 impl StorageLocation {
-    pub fn find(project_root: &Path, config: &Config) -> Result<Self> {
-        let storage_root = Self::determine_storage_path(project_root, &config.storage.location_strategy)?;
-        Ok(Self { root: storage_root })
-    }
-
     pub fn init(project_root: &Path, config: &Config) -> Result<Self> {
         let storage_root = Self::determine_storage_path(project_root, &config.storage.location_strategy)?;
 
@@ -59,10 +54,6 @@ impl StorageLocation {
         }
 
         None
-    }
-
-    pub fn exists(&self) -> bool {
-        self.root.exists()
     }
 
     pub fn root(&self) -> &Path {

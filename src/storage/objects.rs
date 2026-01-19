@@ -57,10 +57,6 @@ impl ObjectStore {
         Ok(content)
     }
 
-    pub fn exists(&self, hash: &str) -> bool {
-        self.object_path(hash).exists()
-    }
-
     fn object_path(&self, hash: &str) -> PathBuf {
         let (prefix, rest) = hash.split_at(2);
         self.objects_dir.join(prefix).join(rest)

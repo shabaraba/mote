@@ -40,9 +40,6 @@ pub enum MoteError {
 
     #[error("TOML parse error: {0}")]
     TomlParse(#[from] toml::de::Error),
-
-    #[error("Invalid snapshot metadata: {0}")]
-    InvalidMetadata(String),
 }
 
 pub type Result<T> = std::result::Result<T, MoteError>;

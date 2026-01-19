@@ -22,6 +22,17 @@ pub enum Commands {
         /// Trigger source (e.g., "claude-code-hook", "manual")
         #[arg(short, long)]
         trigger: Option<String>,
+
+        /// Auto mode: skip if no changes, quiet output (for git/jj hooks)
+        #[arg(long)]
+        auto: bool,
+    },
+
+    /// Print shell integration script for git/jj auto-snapshot
+    SetupShell {
+        /// Shell type (bash, zsh, fish)
+        #[arg(default_value = "zsh")]
+        shell: String,
     },
 
     /// Show snapshot history
