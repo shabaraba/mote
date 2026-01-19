@@ -522,7 +522,15 @@ fn generate_unified_diff(
     } else {
         match object_store.retrieve(hash2) {
             Ok(c) => c,
-            Err(MoteError::ObjectNotFound(_)) => return Ok(()),
+            Err(MoteError::ObjectNotFound(hash)) => {
+                eprintln!(
+                    "{}: Object not found for {}: {}",
+                    "warning".yellow(),
+                    path,
+                    hash
+                );
+                return Ok(());
+            }
             Err(e) => return Err(e),
         }
     };
@@ -706,11 +714,11 @@ fn restore_files(
     project_root: &Path,
     snapshot: &Snapshot,
     object_store: &ObjectStore,
-    force: bool,
+    _force: bool,
     dry_run: bool,
 ) -> Result<(u32, u32)> {
     let mut restored = 0;
-    let mut skipped = 0;
+    let skipped = 0;
 
     for file in &snapshot.files {
         let dest = project_root.join(&file.path);

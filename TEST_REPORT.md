@@ -99,7 +99,7 @@ $ mote snapshot --auto
 
 #### テスト 2.5: triggerオプション付き
 ```bash
-$ mote snapshot -m "After edit" -t "claude-code-hook"
+mote snapshot -m "After edit" -t "claude-code-hook"
 ```
 
 **結果**: ✅ PASS

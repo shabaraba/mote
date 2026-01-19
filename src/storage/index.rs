@@ -17,22 +17,32 @@ pub struct IndexEntry {
 
 mod systemtime_serde {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+    #[derive(Serialize, Deserialize)]
+    struct SystemTimeData {
+        secs: u64,
+        nanos: u32,
+    }
 
     pub fn serialize<S>(time: &SystemTime, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         let duration = time.duration_since(UNIX_EPOCH).map_err(serde::ser::Error::custom)?;
-        duration.as_secs().serialize(serializer)
+        let data = SystemTimeData {
+            secs: duration.as_secs(),
+            nanos: duration.subsec_nanos(),
+        };
+        data.serialize(serializer)
     }
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<SystemTime, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let secs = u64::deserialize(deserializer)?;
-        Ok(UNIX_EPOCH + std::time::Duration::from_secs(secs))
+        let data = SystemTimeData::deserialize(deserializer)?;
+        Ok(UNIX_EPOCH + Duration::new(data.secs, data.nanos))
     }
 }
 
