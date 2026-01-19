@@ -18,9 +18,13 @@ use error::{MoteError, Result};
 use ignore::{create_default_moteignore, IgnoreFilter};
 use storage::{FileEntry, Index, IndexEntry, ObjectStore, Snapshot, SnapshotStore, StorageLocation};
 
+/// Context holding common parameters passed to command functions.
 struct Context<'a> {
+    /// The project root directory.
     project_root: &'a Path,
+    /// The loaded configuration.
     config: &'a Config,
+    /// Optional custom storage directory.
     storage_dir: Option<&'a Path>,
 }
 
@@ -31,6 +35,8 @@ fn main() {
     }
 }
 
+/// Main entry point for command execution.
+/// Parses CLI arguments, resolves paths, and dispatches to appropriate command handlers.
 fn run() -> Result<()> {
     let cli = Cli::parse();
     let project_root = cli
@@ -39,17 +45,33 @@ fn run() -> Result<()> {
         .unwrap_or_else(|| std::env::current_dir().expect("Failed to get current directory"));
     let mut config = Config::load()?;
 
-    if let Some(ignore_file) = &cli.ignore_file {
+    let resolved_ignore_file = cli.ignore_file.as_ref().map(|path| {
+        if path.is_absolute() {
+            path.clone()
+        } else {
+            project_root.join(path)
+        }
+    });
+
+    if let Some(ignore_file) = &resolved_ignore_file {
         config.ignore.ignore_file = ignore_file
             .to_str()
             .ok_or_else(|| MoteError::ConfigRead("Invalid ignore file path".to_string()))?
             .to_string();
     }
 
+    let resolved_storage_dir = cli.storage_dir.as_ref().map(|path| {
+        if path.is_absolute() {
+            path.clone()
+        } else {
+            project_root.join(path)
+        }
+    });
+
     let ctx = Context {
         project_root: &project_root,
         config: &config,
-        storage_dir: cli.storage_dir.as_deref(),
+        storage_dir: resolved_storage_dir.as_deref(),
     };
 
     match cli.command {
@@ -83,6 +105,8 @@ fn run() -> Result<()> {
     }
 }
 
+/// Initialize mote in the project directory.
+/// Creates storage directories and default ignore file.
 fn cmd_init(ctx: &Context) -> Result<()> {
     Config::save_default()?;
     let location = StorageLocation::init(ctx.project_root, ctx.config, ctx.storage_dir)?;
@@ -97,6 +121,8 @@ fn cmd_init(ctx: &Context) -> Result<()> {
     Ok(())
 }
 
+/// Collect all files from the project directory, respecting ignore rules.
+/// Uses the index cache to skip unchanged files for performance.
 fn collect_files(
     project_root: &Path,
     config: &Config,
@@ -177,6 +203,8 @@ fn collect_files(
     files
 }
 
+/// Check if two file lists have identical content hashes.
+/// Used to skip creating duplicate snapshots in auto mode.
 fn have_same_file_hashes(files1: &[FileEntry], files2: &[FileEntry]) -> bool {
     if files1.len() != files2.len() {
         return false;
@@ -185,6 +213,8 @@ fn have_same_file_hashes(files1: &[FileEntry], files2: &[FileEntry]) -> bool {
     files2.iter().all(|f| map.get(&f.path) == Some(&&f.hash))
 }
 
+/// Create a new snapshot of the project files.
+/// In auto mode, skips if no changes detected or no storage initialized.
 fn cmd_snapshot(
     ctx: &Context,
     message: Option<String>,
@@ -248,6 +278,8 @@ fn cmd_snapshot(
     Ok(())
 }
 
+/// Print shell integration script for auto-snapshot hooks.
+/// Supports bash, zsh, and fish shells.
 fn cmd_setup_shell(shell: &str) -> Result<()> {
     let script = match shell {
         "bash" | "zsh" => include_str!("../scripts/shell_integration.sh"),
@@ -263,6 +295,8 @@ fn cmd_setup_shell(shell: &str) -> Result<()> {
     Ok(())
 }
 
+/// Display snapshot history with optional formatting.
+/// Shows up to `limit` most recent snapshots.
 fn cmd_log(ctx: &Context, limit: usize, oneline: bool) -> Result<()> {
     let location = StorageLocation::find_existing(ctx.project_root, ctx.storage_dir)?;
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
@@ -301,6 +335,8 @@ fn cmd_log(ctx: &Context, limit: usize, oneline: bool) -> Result<()> {
     Ok(())
 }
 
+/// Show detailed information about a specific snapshot.
+/// Includes metadata and file list.
 fn cmd_show(ctx: &Context, snapshot_id: &str) -> Result<()> {
     let location = StorageLocation::find_existing(ctx.project_root, ctx.storage_dir)?;
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
@@ -327,6 +363,8 @@ fn cmd_show(ctx: &Context, snapshot_id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Show differences between snapshots or working directory.
+/// Compares two snapshots, or a snapshot with current working directory.
 fn cmd_diff(
     ctx: &Context,
     snapshot_id: Option<String>,
@@ -386,10 +424,13 @@ fn cmd_diff(
     Ok(())
 }
 
+/// Convert file list to a hashmap for efficient lookup by path.
 fn files_to_map(files: &[FileEntry]) -> HashMap<&str, &FileEntry> {
     files.iter().map(|f| (f.path.as_str(), f)).collect()
 }
 
+/// Generate diff between two snapshots.
+/// Outputs unified diff format or file names only.
 fn diff_snapshots(
     snapshot1: &Snapshot,
     snapshot2: &Snapshot,
@@ -448,6 +489,8 @@ fn diff_snapshots(
     Ok(())
 }
 
+/// Generate diff between a snapshot and current working directory.
+/// Respects ignore rules when scanning working directory.
 fn diff_with_working_dir(
     project_root: &Path,
     config: &Config,
@@ -528,6 +571,8 @@ fn diff_with_working_dir(
     Ok(())
 }
 
+/// Generate unified diff for a file between two content hashes.
+/// Retrieves file contents from object store.
 fn generate_unified_diff(
     object_store: &ObjectStore,
     path: &str,
@@ -557,6 +602,8 @@ fn generate_unified_diff(
     generate_unified_diff_with_content(object_store, path, hash1, &content2, context_lines, output)
 }
 
+/// Generate unified diff for a file with explicit content.
+/// Used when comparing with working directory files.
 fn generate_unified_diff_with_content(
     object_store: &ObjectStore,
     path: &str,
@@ -602,6 +649,8 @@ fn generate_unified_diff_with_content(
     Ok(())
 }
 
+/// Restore files from a snapshot.
+/// Can restore entire snapshot or a specific file.
 fn cmd_restore(
     ctx: &Context,
     snapshot_id: &str,
@@ -635,6 +684,8 @@ fn cmd_restore(
     }
 }
 
+/// Restore a single file from a snapshot.
+/// Shows dry-run output if requested.
 fn restore_single_file(
     project_root: &Path,
     snapshot: &Snapshot,
@@ -666,6 +717,8 @@ fn restore_single_file(
     Ok(())
 }
 
+/// Create automatic backup snapshot before restore operation.
+/// Captures current state to allow undo.
 fn create_backup_snapshot(
     project_root: &Path,
     config: &Config,
@@ -696,6 +749,8 @@ fn create_backup_snapshot(
     Ok(())
 }
 
+/// Restore all files from a snapshot.
+/// Creates backup unless force flag is set.
 fn restore_all_files(
     project_root: &Path,
     config: &Config,
@@ -728,6 +783,8 @@ fn restore_all_files(
     Ok(())
 }
 
+/// Restore files from snapshot to disk.
+/// Returns count of restored and skipped files.
 fn restore_files(
     project_root: &Path,
     snapshot: &Snapshot,
