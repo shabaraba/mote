@@ -8,8 +8,12 @@ pub struct StorageLocation {
 }
 
 impl StorageLocation {
-    pub fn init(project_root: &Path, config: &Config) -> Result<Self> {
-        let storage_root = Self::determine_storage_path(project_root, &config.storage.location_strategy)?;
+    pub fn init(project_root: &Path, config: &Config, custom_storage_dir: Option<&Path>) -> Result<Self> {
+        let storage_root = if let Some(custom_dir) = custom_storage_dir {
+            custom_dir.to_path_buf()
+        } else {
+            Self::determine_storage_path(project_root, &config.storage.location_strategy)?
+        };
 
         if storage_root.exists() {
             return Err(MoteError::AlreadyInitialized);
@@ -72,7 +76,17 @@ impl StorageLocation {
         self.root.join("index")
     }
 
-    pub fn find_existing(project_root: &Path) -> Result<Self> {
+    pub fn find_existing(project_root: &Path, custom_storage_dir: Option<&Path>) -> Result<Self> {
+        if let Some(custom_dir) = custom_storage_dir {
+            if custom_dir.exists() {
+                return Ok(Self {
+                    root: custom_dir.to_path_buf(),
+                });
+            } else {
+                return Err(MoteError::NotInitialized);
+            }
+        }
+
         let mote_dir = project_root.join(".mote");
         if mote_dir.exists() {
             return Ok(Self { root: mote_dir });

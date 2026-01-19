@@ -1,9 +1,22 @@
 use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "mote")]
 #[command(author, version, about = "A fine-grained snapshot management tool", long_about = None)]
 pub struct Cli {
+    /// Custom project root (defaults to current directory)
+    #[arg(long)]
+    pub project_root: Option<PathBuf>,
+
+    /// Custom ignore file path (overrides config)
+    #[arg(long)]
+    pub ignore_file: Option<PathBuf>,
+
+    /// Custom storage directory
+    #[arg(long)]
+    pub storage_dir: Option<PathBuf>,
+
     #[command(subcommand)]
     pub command: Commands,
 }

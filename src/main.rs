@@ -27,17 +27,27 @@ fn main() {
 
 fn run() -> Result<()> {
     let cli = Cli::parse();
-    let project_root = std::env::current_dir()?;
-    let config = Config::load()?;
+    let project_root = cli
+        .project_root
+        .clone()
+        .unwrap_or_else(|| std::env::current_dir().expect("Failed to get current directory"));
+    let mut config = Config::load()?;
+
+    if let Some(ignore_file) = &cli.ignore_file {
+        config.ignore.ignore_file = ignore_file
+            .to_str()
+            .ok_or_else(|| MoteError::ConfigRead("Invalid ignore file path".to_string()))?
+            .to_string();
+    }
 
     match cli.command {
-        Commands::Init => cmd_init(&project_root, &config),
+        Commands::Init => cmd_init(&project_root, &config, cli.storage_dir.as_deref()),
         Commands::Snapshot { message, trigger, auto } => {
-            cmd_snapshot(&project_root, &config, message, trigger, auto)
+            cmd_snapshot(&project_root, &config, cli.storage_dir.as_deref(), message, trigger, auto)
         }
         Commands::SetupShell { shell } => cmd_setup_shell(&shell),
-        Commands::Log { limit, oneline } => cmd_log(&project_root, limit, oneline),
-        Commands::Show { snapshot_id } => cmd_show(&project_root, &snapshot_id),
+        Commands::Log { limit, oneline } => cmd_log(&project_root, cli.storage_dir.as_deref(), limit, oneline),
+        Commands::Show { snapshot_id } => cmd_show(&project_root, cli.storage_dir.as_deref(), &snapshot_id),
         Commands::Diff {
             snapshot_id,
             snapshot_id2,
@@ -47,6 +57,7 @@ fn run() -> Result<()> {
         } => cmd_diff(
             &project_root,
             &config,
+            cli.storage_dir.as_deref(),
             snapshot_id,
             snapshot_id2,
             name_only,
@@ -58,13 +69,13 @@ fn run() -> Result<()> {
             file,
             force,
             dry_run,
-        } => cmd_restore(&project_root, &config, &snapshot_id, file, force, dry_run),
+        } => cmd_restore(&project_root, &config, cli.storage_dir.as_deref(), &snapshot_id, file, force, dry_run),
     }
 }
 
-fn cmd_init(project_root: &Path, config: &Config) -> Result<()> {
+fn cmd_init(project_root: &Path, config: &Config, storage_dir: Option<&Path>) -> Result<()> {
     Config::save_default()?;
-    let location = StorageLocation::init(project_root, config)?;
+    let location = StorageLocation::init(project_root, config, storage_dir)?;
     create_default_moteignore(project_root)?;
 
     println!(
@@ -167,11 +178,12 @@ fn have_same_file_hashes(files1: &[FileEntry], files2: &[FileEntry]) -> bool {
 fn cmd_snapshot(
     project_root: &Path,
     config: &Config,
+    storage_dir: Option<&Path>,
     message: Option<String>,
     trigger: Option<String>,
     auto: bool,
 ) -> Result<()> {
-    let location = match StorageLocation::find_existing(project_root) {
+    let location = match StorageLocation::find_existing(project_root, storage_dir) {
         Ok(loc) => loc,
         Err(_) if auto => return Ok(()),
         Err(e) => return Err(e),
@@ -243,8 +255,8 @@ fn cmd_setup_shell(shell: &str) -> Result<()> {
     Ok(())
 }
 
-fn cmd_log(project_root: &Path, limit: usize, oneline: bool) -> Result<()> {
-    let location = StorageLocation::find_existing(project_root)?;
+fn cmd_log(project_root: &Path, storage_dir: Option<&Path>, limit: usize, oneline: bool) -> Result<()> {
+    let location = StorageLocation::find_existing(project_root, storage_dir)?;
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
     let snapshots = snapshot_store.list()?;
 
@@ -281,8 +293,8 @@ fn cmd_log(project_root: &Path, limit: usize, oneline: bool) -> Result<()> {
     Ok(())
 }
 
-fn cmd_show(project_root: &Path, snapshot_id: &str) -> Result<()> {
-    let location = StorageLocation::find_existing(project_root)?;
+fn cmd_show(project_root: &Path, storage_dir: Option<&Path>, snapshot_id: &str) -> Result<()> {
+    let location = StorageLocation::find_existing(project_root, storage_dir)?;
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
     let snapshot = snapshot_store.find_by_id(snapshot_id)?;
 
@@ -310,13 +322,14 @@ fn cmd_show(project_root: &Path, snapshot_id: &str) -> Result<()> {
 fn cmd_diff(
     project_root: &Path,
     config: &Config,
+    storage_dir: Option<&Path>,
     snapshot_id: Option<String>,
     snapshot_id2: Option<String>,
     name_only: bool,
     output: Option<String>,
     unified: usize,
 ) -> Result<()> {
-    let location = StorageLocation::find_existing(project_root)?;
+    let location = StorageLocation::find_existing(project_root, storage_dir)?;
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
     let object_store = ObjectStore::new(location.objects_dir(), config.storage.compression_level);
 
@@ -586,12 +599,13 @@ fn generate_unified_diff_with_content(
 fn cmd_restore(
     project_root: &Path,
     config: &Config,
+    storage_dir: Option<&Path>,
     snapshot_id: &str,
     file: Option<String>,
     force: bool,
     dry_run: bool,
 ) -> Result<()> {
-    let location = StorageLocation::find_existing(project_root)?;
+    let location = StorageLocation::find_existing(project_root, storage_dir)?;
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
     let object_store = ObjectStore::new(location.objects_dir(), config.storage.compression_level);
     let snapshot = snapshot_store.find_by_id(snapshot_id)?;
