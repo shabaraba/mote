@@ -726,15 +726,10 @@ fn restore_files(
             continue;
         }
 
-        if dest.exists() && !force {
+        if dest.exists() {
             let current_hash = ObjectStore::compute_hash(&std::fs::read(&dest)?);
-            if current_hash != file.hash {
-                println!(
-                    "{}: {} (use --force to overwrite)",
-                    "Skipped".yellow(),
-                    file.path
-                );
-                skipped += 1;
+            if current_hash == file.hash {
+                // Already in correct state, skip restore
                 continue;
             }
         }

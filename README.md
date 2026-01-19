@@ -232,4 +232,4 @@ require('vibing').setup({
 
 ## License
 
-RIT
+MIT

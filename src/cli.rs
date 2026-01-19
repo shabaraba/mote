@@ -82,7 +82,7 @@ pub enum Commands {
         #[arg(short, long)]
         file: Option<String>,
 
-        /// Force restore without confirmation
+        /// Skip automatic backup creation before restore
         #[arg(long)]
         force: bool,
 
