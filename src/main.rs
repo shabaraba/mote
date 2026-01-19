@@ -215,6 +215,7 @@ fn have_same_file_hashes(files1: &[FileEntry], files2: &[FileEntry]) -> bool {
 
 /// Create a new snapshot of the project files.
 /// In auto mode, skips if no changes detected or no storage initialized.
+/// Auto-initializes storage if custom storage_dir is specified.
 fn cmd_snapshot(
     ctx: &Context,
     message: Option<String>,
@@ -223,6 +224,10 @@ fn cmd_snapshot(
 ) -> Result<()> {
     let location = match StorageLocation::find_existing(ctx.project_root, ctx.storage_dir) {
         Ok(loc) => loc,
+        Err(MoteError::NotInitialized) if ctx.storage_dir.is_some() => {
+            // Auto-initialize when custom storage_dir is specified
+            StorageLocation::init(ctx.project_root, ctx.config, ctx.storage_dir)?
+        }
         Err(_) if auto => return Ok(()),
         Err(e) => return Err(e),
     };
@@ -297,8 +302,15 @@ fn cmd_setup_shell(shell: &str) -> Result<()> {
 
 /// Display snapshot history with optional formatting.
 /// Shows up to `limit` most recent snapshots.
+/// Auto-initializes storage if custom storage_dir is specified.
 fn cmd_log(ctx: &Context, limit: usize, oneline: bool) -> Result<()> {
-    let location = StorageLocation::find_existing(ctx.project_root, ctx.storage_dir)?;
+    let location = match StorageLocation::find_existing(ctx.project_root, ctx.storage_dir) {
+        Ok(loc) => loc,
+        Err(MoteError::NotInitialized) if ctx.storage_dir.is_some() => {
+            StorageLocation::init(ctx.project_root, ctx.config, ctx.storage_dir)?
+        }
+        Err(e) => return Err(e),
+    };
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
     let snapshots = snapshot_store.list()?;
 
@@ -337,8 +349,15 @@ fn cmd_log(ctx: &Context, limit: usize, oneline: bool) -> Result<()> {
 
 /// Show detailed information about a specific snapshot.
 /// Includes metadata and file list.
+/// Auto-initializes storage if custom storage_dir is specified.
 fn cmd_show(ctx: &Context, snapshot_id: &str) -> Result<()> {
-    let location = StorageLocation::find_existing(ctx.project_root, ctx.storage_dir)?;
+    let location = match StorageLocation::find_existing(ctx.project_root, ctx.storage_dir) {
+        Ok(loc) => loc,
+        Err(MoteError::NotInitialized) if ctx.storage_dir.is_some() => {
+            StorageLocation::init(ctx.project_root, ctx.config, ctx.storage_dir)?
+        }
+        Err(e) => return Err(e),
+    };
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
     let snapshot = snapshot_store.find_by_id(snapshot_id)?;
 
@@ -365,6 +384,7 @@ fn cmd_show(ctx: &Context, snapshot_id: &str) -> Result<()> {
 
 /// Show differences between snapshots or working directory.
 /// Compares two snapshots, or a snapshot with current working directory.
+/// Auto-initializes storage if custom storage_dir is specified.
 fn cmd_diff(
     ctx: &Context,
     snapshot_id: Option<String>,
@@ -373,7 +393,13 @@ fn cmd_diff(
     output: Option<String>,
     unified: usize,
 ) -> Result<()> {
-    let location = StorageLocation::find_existing(ctx.project_root, ctx.storage_dir)?;
+    let location = match StorageLocation::find_existing(ctx.project_root, ctx.storage_dir) {
+        Ok(loc) => loc,
+        Err(MoteError::NotInitialized) if ctx.storage_dir.is_some() => {
+            StorageLocation::init(ctx.project_root, ctx.config, ctx.storage_dir)?
+        }
+        Err(e) => return Err(e),
+    };
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
     let object_store = ObjectStore::new(location.objects_dir(), ctx.config.storage.compression_level);
 
@@ -651,6 +677,7 @@ fn generate_unified_diff_with_content(
 
 /// Restore files from a snapshot.
 /// Can restore entire snapshot or a specific file.
+/// Auto-initializes storage if custom storage_dir is specified.
 fn cmd_restore(
     ctx: &Context,
     snapshot_id: &str,
@@ -658,7 +685,13 @@ fn cmd_restore(
     force: bool,
     dry_run: bool,
 ) -> Result<()> {
-    let location = StorageLocation::find_existing(ctx.project_root, ctx.storage_dir)?;
+    let location = match StorageLocation::find_existing(ctx.project_root, ctx.storage_dir) {
+        Ok(loc) => loc,
+        Err(MoteError::NotInitialized) if ctx.storage_dir.is_some() => {
+            StorageLocation::init(ctx.project_root, ctx.config, ctx.storage_dir)?
+        }
+        Err(e) => return Err(e),
+    };
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
     let object_store = ObjectStore::new(location.objects_dir(), ctx.config.storage.compression_level);
     let snapshot = snapshot_store.find_by_id(snapshot_id)?;
