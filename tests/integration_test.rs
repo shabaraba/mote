@@ -306,7 +306,5 @@ fn test_empty_project_snapshot() {
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("No files to snapshot") || stdout.contains("Created snapshot")
-    );
+    assert!(stdout.contains("No files to snapshot") || stdout.contains("Created snapshot"));
 }

@@ -97,7 +97,7 @@ impl SnapshotStore {
             let entry = entry?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "json") {
+            if path.extension().is_some_and(|e| e == "json") {
                 match self.load_snapshot(&path) {
                     Ok(snapshot) => snapshots.push(snapshot),
                     Err(e) => eprintln!("Warning: Failed to load snapshot {:?}: {}", path, e),
@@ -142,7 +142,11 @@ impl SnapshotStore {
 
             if should_remove {
                 if let Err(e) = self.remove(&snapshot.id) {
-                    eprintln!("Warning: Failed to remove snapshot {}: {}", snapshot.short_id(), e);
+                    eprintln!(
+                        "Warning: Failed to remove snapshot {}: {}",
+                        snapshot.short_id(),
+                        e
+                    );
                 } else {
                     removed += 1;
                 }

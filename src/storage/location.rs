@@ -8,7 +8,11 @@ pub struct StorageLocation {
 }
 
 impl StorageLocation {
-    pub fn init(project_root: &Path, config: &Config, custom_storage_dir: Option<&Path>) -> Result<Self> {
+    pub fn init(
+        project_root: &Path,
+        config: &Config,
+        custom_storage_dir: Option<&Path>,
+    ) -> Result<Self> {
         let storage_root = if let Some(custom_dir) = custom_storage_dir {
             custom_dir.to_path_buf()
         } else {
