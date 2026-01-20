@@ -82,6 +82,50 @@ mote restore before-debug
 
 ## Advanced Patterns
 
+### Context Separation with --storage-dir
+
+Use multiple storage directories to organize snapshots by context:
+
+```bash
+# Main project history (default)
+mote snapshot -m "main: complete feature"
+
+# Feature-specific history
+mote --storage-dir .mote-auth snapshot -m "auth: try JWT"
+mote --storage-dir .mote-auth snapshot -m "auth: try OAuth"
+mote --storage-dir .mote-auth log  # View only auth-related snapshots
+
+# Experimental workspace (disposable)
+mote --storage-dir .mote-experiment snapshot -m "radical refactor"
+# ... if experiment fails ...
+rm -rf .mote-experiment  # Clean slate, no pollution of main history
+
+# Personal vs team snapshots
+mote --storage-dir .mote-personal snapshot -m "WIP debugging"
+mote snapshot -m "completed feature"  # Goes to shared .mote/
+```
+
+**Real-world scenario:**
+```bash
+# You're developing a new authentication system
+# while maintaining the main project
+
+# Feature development snapshots (isolated)
+cd auth-module/
+mote --storage-dir .mote-auth snapshot -m "baseline"
+# ... iterate on auth ...
+mote --storage-dir .mote-auth snapshot -m "final"
+mote --storage-dir .mote-auth diff baseline final
+
+# Main project snapshots (not cluttered with auth experiments)
+cd ../
+mote snapshot -m "integrated auth module"
+mote log  # Clean history, no auth iterations
+
+# Add to .gitignore to keep experiment storage local
+echo ".mote-*" >> .gitignore
+```
+
 ### Cross-Branch Comparison
 
 Since mote is git-agnostic, you can compare states across different branches without merging:
@@ -116,3 +160,5 @@ mote diff morning-state evening-state
 - Use descriptive snapshot messages to make them easier to find later
 - Leverage `mote log` to browse your snapshot history
 - Remember: snapshots are independent of git commits—feel free to snapshot frequently!
+- Use `--storage-dir` to separate concerns and keep histories organized
+- Add `.mote-*` to `.gitignore` to keep experimental storage directories local

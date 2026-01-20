@@ -25,6 +25,7 @@ This independence means you can:
 - **🎯 Flexible Comparison**: Diff between snapshots, working directory, or across VCS operations
 - **🗂️ Smart Storage**: `.mote/` or `.git/mote/`—your choice
 - **🛡️ Safe Restoration**: Auto-backup before restore operations
+- **📁 Context Separation**: Multiple storage directories for organizing different workflows
 
 ## Installation
 
@@ -83,6 +84,38 @@ mote restore <snapshot-id> --file src/main.rs
 # Restore entire snapshot
 mote restore <snapshot-id> --force
 ```
+
+## Global Options
+
+All commands support these global options:
+
+### `--storage-dir <path>`
+
+Use a custom storage directory instead of the default `.mote/`. This enables context separation—you can maintain independent snapshot histories for different workflows:
+
+```bash
+# Default: project-wide history
+mote snapshot -m "general work"
+
+# Feature-specific history
+mote --storage-dir .mote-feature-x snapshot -m "feature X iteration"
+mote --storage-dir .mote-feature-x log
+
+# Experimental history (can be deleted anytime)
+mote --storage-dir .mote-experiment snapshot -m "trying new approach"
+```
+
+**Use cases:**
+- **Feature development**: Separate history per feature without cluttering main history
+- **Experiments**: Disposable snapshots that won't pollute your main timeline
+- **Team workflows**: Different storage for personal vs. shared snapshots
+- **Long-term vs. temporary**: Keep important snapshots separate from debugging noise
+
+### Other Global Options
+
+- `--project-root <path>`: Specify project root directory (default: current directory)
+- `--ignore-file <path>`: Use custom ignore file (default: `.moteignore`)
+- `--config <path>`: Use custom config file
 
 ## Commands
 
