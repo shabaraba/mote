@@ -2,6 +2,7 @@ mod cli;
 mod config;
 mod error;
 mod ignore;
+mod path_resolver;
 mod storage;
 
 use std::collections::{HashMap, HashSet};
@@ -15,7 +16,8 @@ use similar::{ChangeTag, TextDiff};
 use cli::{Cli, Commands};
 use config::Config;
 use error::{MoteError, Result};
-use ignore::{create_default_moteignore, IgnoreFilter};
+use ignore::{create_ignore_file, IgnoreFilter};
+use path_resolver::resolve_ignore_file_path;
 use storage::{
     FileEntry, Index, IndexEntry, ObjectStore, Snapshot, SnapshotStore, StorageLocation,
 };
@@ -28,6 +30,8 @@ struct Context<'a> {
     config: &'a Config,
     /// Optional custom storage directory.
     storage_dir: Option<&'a Path>,
+    /// Resolved ignore file path.
+    ignore_file_path: std::path::PathBuf,
 }
 
 fn main() {
@@ -45,22 +49,14 @@ fn run() -> Result<()> {
         .project_root
         .clone()
         .unwrap_or_else(|| std::env::current_dir().expect("Failed to get current directory"));
-    let mut config = Config::load()?;
+    let config = Config::load()?;
 
-    let resolved_ignore_file = cli.ignore_file.as_ref().map(|path| {
-        if path.is_absolute() {
-            path.clone()
-        } else {
-            project_root.join(path)
-        }
-    });
-
-    if let Some(ignore_file) = &resolved_ignore_file {
-        config.ignore.ignore_file = ignore_file
-            .to_str()
-            .ok_or_else(|| MoteError::ConfigRead("Invalid ignore file path".to_string()))?
-            .to_string();
-    }
+    // Resolve ignore file path
+    let ignore_file_path = resolve_ignore_file_path(
+        &project_root,
+        cli.ignore_file.as_deref(),
+        &config.ignore.ignore_file,
+    );
 
     let resolved_storage_dir = cli.storage_dir.as_ref().map(|path| {
         if path.is_absolute() {
@@ -74,6 +70,7 @@ fn run() -> Result<()> {
         project_root: &project_root,
         config: &config,
         storage_dir: resolved_storage_dir.as_deref(),
+        ignore_file_path,
     };
 
     match cli.command {
@@ -107,14 +104,24 @@ fn run() -> Result<()> {
 fn cmd_init(ctx: &Context) -> Result<()> {
     Config::save_default()?;
     let location = StorageLocation::init(ctx.project_root, ctx.config, ctx.storage_dir)?;
-    create_default_moteignore(ctx.project_root)?;
+
+    // Create ignore file at resolved path
+    let created_path = create_ignore_file(&ctx.ignore_file_path)?;
+
+    // Display actual filename (show relative path if within project_root)
+    let display_path = created_path
+        .strip_prefix(ctx.project_root)
+        .unwrap_or(&created_path);
 
     println!(
         "{} Initialized mote in {}",
         "✓".green().bold(),
         location.root().display()
     );
-    println!("  Created {} for ignore patterns", ".moteignore".cyan());
+    println!(
+        "  Created {} for ignore patterns",
+        display_path.display().to_string().cyan()
+    );
     Ok(())
 }
 
@@ -122,12 +129,12 @@ fn cmd_init(ctx: &Context) -> Result<()> {
 /// Uses the index cache to skip unchanged files for performance.
 fn collect_files(
     project_root: &Path,
-    config: &Config,
+    ignore_file_path: &Path,
     object_store: &ObjectStore,
     index: &mut Index,
     quiet: bool,
 ) -> Vec<FileEntry> {
-    let ignore_filter = IgnoreFilter::new(project_root, &config.ignore.ignore_file);
+    let ignore_filter = IgnoreFilter::new(ignore_file_path);
     let mut files = Vec::new();
 
     for entry in ignore_filter.walk_files(project_root) {
@@ -245,7 +252,7 @@ fn cmd_snapshot(
     let mut index = Index::load(&location.index_path())?;
     let files = collect_files(
         ctx.project_root,
-        ctx.config,
+        &ctx.ignore_file_path,
         &object_store,
         &mut index,
         auto,
@@ -446,7 +453,7 @@ fn cmd_diff(
     } else {
         diff_with_working_dir(
             ctx.project_root,
-            ctx.config,
+            &ctx.ignore_file_path,
             &snapshot1,
             &object_store,
             name_only,
@@ -534,7 +541,7 @@ fn diff_snapshots(
 /// Respects ignore rules when scanning working directory.
 fn diff_with_working_dir(
     project_root: &Path,
-    config: &Config,
+    ignore_file_path: &Path,
     snapshot: &Snapshot,
     object_store: &ObjectStore,
     name_only: bool,
@@ -551,7 +558,7 @@ fn diff_with_working_dir(
     .unwrap();
     writeln!(output).unwrap();
 
-    let ignore_filter = IgnoreFilter::new(project_root, &config.ignore.ignore_file);
+    let ignore_filter = IgnoreFilter::new(ignore_file_path);
     let snapshot_files = files_to_map(&snapshot.files);
     let mut current_files = HashSet::new();
 
@@ -733,7 +740,7 @@ fn cmd_restore(
         let mut index = Index::load(&location.index_path())?;
         let result = restore_all_files(
             ctx.project_root,
-            ctx.config,
+            &ctx.ignore_file_path,
             &snapshot,
             &object_store,
             &snapshot_store,
@@ -785,13 +792,13 @@ fn restore_single_file(
 /// Captures current state to allow undo.
 fn create_backup_snapshot(
     project_root: &Path,
-    config: &Config,
+    ignore_file_path: &Path,
     object_store: &ObjectStore,
     snapshot_store: &SnapshotStore,
     target_snapshot: &Snapshot,
     index: &mut Index,
 ) -> Result<()> {
-    let files = collect_files(project_root, config, object_store, index, true);
+    let files = collect_files(project_root, ignore_file_path, object_store, index, true);
     if files.is_empty() {
         return Ok(());
     }
@@ -818,7 +825,7 @@ fn create_backup_snapshot(
 #[allow(clippy::too_many_arguments)]
 fn restore_all_files(
     project_root: &Path,
-    config: &Config,
+    ignore_file_path: &Path,
     snapshot: &Snapshot,
     object_store: &ObjectStore,
     snapshot_store: &SnapshotStore,
@@ -829,7 +836,7 @@ fn restore_all_files(
     if !force && !dry_run {
         create_backup_snapshot(
             project_root,
-            config,
+            ignore_file_path,
             object_store,
             snapshot_store,
             snapshot,

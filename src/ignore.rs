@@ -1,5 +1,5 @@
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use crate::error::Result;
@@ -9,12 +9,20 @@ pub struct IgnoreFilter {
 }
 
 impl IgnoreFilter {
-    pub fn new(project_root: &Path, ignore_file: &str) -> Self {
-        let ignore_path = project_root.join(ignore_file);
+    /// Creates a new IgnoreFilter for the given ignore file path.
+    ///
+    /// # Arguments
+    /// * `ignore_file_path` - Full path to the ignore file
+    pub fn new(ignore_file_path: &Path) -> Self {
+        let gitignore = if ignore_file_path.exists() {
+            // Use parent directory as project root for gitignore rules
+            let project_root = ignore_file_path
+                .parent()
+                .and_then(|p| p.parent())
+                .unwrap_or_else(|| Path::new("."));
 
-        let gitignore = if ignore_path.exists() {
             let mut builder = GitignoreBuilder::new(project_root);
-            let _ = builder.add(&ignore_path);
+            let _ = builder.add(ignore_file_path);
             builder.build().ok()
         } else {
             None
@@ -57,11 +65,27 @@ impl IgnoreFilter {
     }
 }
 
-pub fn create_default_moteignore(project_root: &Path) -> Result<()> {
-    let ignore_path = project_root.join(".moteignore");
-
+/// Creates an ignore file at the specified path with default content.
+/// Returns the path of the created file (or existing file if already present).
+///
+/// # Arguments
+/// * `ignore_path` - The full path where the ignore file should be created
+///
+/// # Behavior
+/// - Does not overwrite existing files (idempotent)
+/// - Automatically creates parent directories if they don't exist
+/// - Returns Ok even if file already exists
+pub fn create_ignore_file(ignore_path: &Path) -> Result<PathBuf> {
+    // Don't overwrite existing files
     if ignore_path.exists() {
-        return Ok(());
+        return Ok(ignore_path.to_path_buf());
+    }
+
+    // Create parent directories if needed
+    if let Some(parent) = ignore_path.parent() {
+        if !parent.exists() {
+            std::fs::create_dir_all(parent)?;
+        }
     }
 
     let default_content = r#"# Mote ignore file
@@ -104,6 +128,7 @@ logs/
 .cache/
 "#;
 
-    std::fs::write(&ignore_path, default_content)?;
-    Ok(())
+    std::fs::write(ignore_path, default_content)?;
+    Ok(ignore_path.to_path_buf())
 }
+
