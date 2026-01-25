@@ -2,8 +2,11 @@ mod cli;
 mod config;
 mod error;
 mod ignore;
+mod main_new_commands;
 mod path_resolver;
 mod storage;
+
+use main_new_commands::{cmd_context, cmd_ignore, cmd_init_project, cmd_migrate};
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -14,7 +17,7 @@ use colored::*;
 use similar::{ChangeTag, TextDiff};
 
 use cli::{Cli, Commands};
-use config::Config;
+use config::{Config, ConfigResolver, ResolveOptions};
 use error::{MoteError, Result};
 use ignore::{create_ignore_file, IgnoreFilter};
 use path_resolver::resolve_ignore_file_path;
@@ -49,22 +52,37 @@ fn run() -> Result<()> {
         .project_root
         .clone()
         .unwrap_or_else(|| std::env::current_dir().expect("Failed to get current directory"));
-    let config = Config::load()?;
 
-    // Resolve ignore file path
-    let ignore_file_path = resolve_ignore_file_path(
-        &project_root,
-        cli.ignore_file.as_deref(),
-        &config.ignore.ignore_file,
-    );
+    // Resolve configuration using ConfigResolver
+    let resolve_opts = ResolveOptions {
+        config_dir: cli.config_dir.clone(),
+        project: cli.project.clone(),
+        context: cli.context.clone(),
+        project_root: project_root.clone(),
+    };
 
-    let resolved_storage_dir = cli.storage_dir.as_ref().map(|path| {
-        if path.is_absolute() {
-            path.clone()
-        } else {
-            project_root.join(path)
-        }
-    });
+    let config_resolver = ConfigResolver::load(&resolve_opts)?;
+    let config = config_resolver.resolve();
+
+    // Resolve ignore file path (CLI > Context > Config default)
+    let ignore_file_path = cli
+        .ignore_file
+        .clone()
+        .or_else(|| config_resolver.context_ignore_path())
+        .unwrap_or_else(|| resolve_ignore_file_path(&project_root, None, &config.ignore.ignore_file));
+
+    // Resolve storage directory (CLI > Context > None)
+    let resolved_storage_dir = cli
+        .storage_dir
+        .clone()
+        .or_else(|| config_resolver.context_storage_dir())
+        .map(|path| {
+            if path.is_absolute() {
+                path
+            } else {
+                project_root.join(path)
+            }
+        });
 
     let ctx = Context {
         project_root: &project_root,
@@ -75,6 +93,22 @@ fn run() -> Result<()> {
 
     match cli.command {
         Commands::Init => cmd_init(&ctx),
+        Commands::InitProject {
+            project_name,
+            cwd,
+            context,
+            max_snapshots,
+            max_age_days,
+            storage_dir,
+        } => cmd_init_project(
+            &config_resolver,
+            &project_name,
+            cwd,
+            context,
+            max_snapshots,
+            max_age_days,
+            storage_dir,
+        ),
         Commands::Snapshot {
             message,
             trigger,
@@ -96,6 +130,9 @@ fn run() -> Result<()> {
             force,
             dry_run,
         } => cmd_restore(&ctx, &snapshot_id, file, force, dry_run),
+        Commands::Context { command } => cmd_context(&config_resolver, command),
+        Commands::Ignore { command } => cmd_ignore(&ctx, command),
+        Commands::Migrate { dry_run } => cmd_migrate(&project_root, &config_resolver, dry_run),
     }
 }
 
@@ -245,8 +282,7 @@ fn cmd_snapshot(
         Err(_) if auto => return Ok(()),
         Err(e) => return Err(e),
     };
-    let object_store =
-        ObjectStore::new(location.objects_dir(), ctx.config.storage.compression_level);
+    let object_store = ObjectStore::new(location.objects_dir());
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
 
     let mut index = Index::load(&location.index_path())?;
@@ -422,8 +458,7 @@ fn cmd_diff(
         Err(e) => return Err(e),
     };
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
-    let object_store =
-        ObjectStore::new(location.objects_dir(), ctx.config.storage.compression_level);
+    let object_store = ObjectStore::new(location.objects_dir());
 
     let snapshot_id = match snapshot_id {
         Some(id) => id,
@@ -724,8 +759,7 @@ fn cmd_restore(
         Err(e) => return Err(e),
     };
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
-    let object_store =
-        ObjectStore::new(location.objects_dir(), ctx.config.storage.compression_level);
+    let object_store = ObjectStore::new(location.objects_dir());
     let snapshot = snapshot_store.find_by_id(snapshot_id)?;
 
     if let Some(ref file_path) = file {
