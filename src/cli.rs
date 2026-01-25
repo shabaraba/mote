@@ -17,14 +17,52 @@ pub struct Cli {
     #[arg(long)]
     pub storage_dir: Option<PathBuf>,
 
+    /// Custom config directory
+    #[arg(short = 'd', long)]
+    pub config_dir: Option<PathBuf>,
+
+    /// Project name
+    #[arg(short = 'p', long)]
+    pub project: Option<String>,
+
+    /// Context name
+    #[arg(short = 'c', long)]
+    pub context: Option<String>,
+
     #[command(subcommand)]
     pub command: Commands,
 }
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Initialize mote in the current directory
+    /// Initialize mote in the current directory (legacy, use init-project for new structure)
     Init,
+
+    /// Initialize a new project with context structure
+    InitProject {
+        /// Project name
+        project_name: String,
+
+        /// Project root path (defaults to current directory)
+        #[arg(long)]
+        cwd: Option<PathBuf>,
+
+        /// Initial context name (defaults to "default")
+        #[arg(long)]
+        context: Option<String>,
+
+        /// Maximum snapshots to keep
+        #[arg(long)]
+        max_snapshots: Option<u32>,
+
+        /// Maximum age in days
+        #[arg(long)]
+        max_age_days: Option<u32>,
+
+        /// Storage directory (relative to context or absolute)
+        #[arg(long)]
+        storage_dir: Option<PathBuf>,
+    },
 
     /// Create a new snapshot
     Snapshot {
@@ -103,4 +141,70 @@ pub enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
+
+    /// Manage contexts
+    Context {
+        #[command(subcommand)]
+        command: ContextCommands,
+    },
+
+    /// Manage ignore patterns
+    Ignore {
+        #[command(subcommand)]
+        command: IgnoreCommands,
+    },
+
+    /// Migrate existing .mote directory to new structure
+    Migrate {
+        /// Show what would be migrated without actually migrating
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ContextCommands {
+    /// List all contexts
+    List,
+
+    /// Create a new context
+    New {
+        /// Context name
+        name: String,
+
+        /// Working directory for this context
+        #[arg(long)]
+        cwd: Option<PathBuf>,
+
+        /// Storage directory (relative to context or absolute)
+        #[arg(long)]
+        storage_dir: Option<PathBuf>,
+    },
+
+    /// Delete a context
+    Delete {
+        /// Context name
+        name: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum IgnoreCommands {
+    /// List ignore patterns
+    List,
+
+    /// Add ignore pattern
+    Add {
+        /// Pattern to add
+        pattern: String,
+    },
+
+    /// Remove ignore pattern
+    Remove {
+        /// Pattern to remove
+        pattern: String,
+    },
+
+    /// Edit ignore file in editor
+    Edit,
 }
