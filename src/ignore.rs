@@ -18,7 +18,6 @@ impl IgnoreFilter {
             // Use parent directory as project root for gitignore rules
             let project_root = ignore_file_path
                 .parent()
-                .and_then(|p| p.parent())
                 .unwrap_or_else(|| Path::new("."));
 
             let mut builder = GitignoreBuilder::new(project_root);
