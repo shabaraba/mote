@@ -71,6 +71,13 @@ fn run() -> Result<()> {
         .or_else(|| config_resolver.context_ignore_path())
         .unwrap_or_else(|| resolve_ignore_file_path(&project_root, None, &config.ignore.ignore_file));
 
+    // Normalize ignore_file_path to absolute path
+    let ignore_file_path = if ignore_file_path.is_absolute() {
+        ignore_file_path
+    } else {
+        project_root.join(ignore_file_path)
+    };
+
     // Resolve storage directory (CLI > Context > None)
     let resolved_storage_dir = cli
         .storage_dir
