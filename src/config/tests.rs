@@ -227,6 +227,71 @@ mod context_validation_tests {
 }
 
 #[cfg(test)]
+mod security_tests {
+    use crate::config::ContextConfig;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_storage_path_prevents_traversal() {
+        let config = ContextConfig {
+            cwd: None,
+            storage_dir: Some("../../escape".to_string()),
+            config: crate::config::Config::default(),
+        };
+
+        let project_dir = PathBuf::from("/tmp/test/projects/my-project");
+        let storage = config.storage_path(&project_dir, "default");
+
+        // Should not escape to /tmp/test/escape
+        // Should fall back to safe default: /tmp/test/projects/my-project/contexts/default/storage
+        assert!(
+            storage.to_str().unwrap().contains("contexts/default/storage"),
+            "storage_dir with '..' should be rejected, got: {:?}",
+            storage
+        );
+    }
+
+    #[test]
+    fn test_storage_path_rejects_absolute() {
+        let config = ContextConfig {
+            cwd: None,
+            storage_dir: Some("/etc/passwd".to_string()),
+            config: crate::config::Config::default(),
+        };
+
+        let project_dir = PathBuf::from("/tmp/test/projects/my-project");
+        let storage = config.storage_path(&project_dir, "default");
+
+        // Should reject absolute path and use safe default
+        assert!(
+            storage.to_str().unwrap().contains("contexts/default/storage"),
+            "Absolute storage_dir should be rejected, got: {:?}",
+            storage
+        );
+    }
+
+    #[test]
+    fn test_storage_path_allows_safe_relative() {
+        let config = ContextConfig {
+            cwd: None,
+            storage_dir: Some("custom_storage".to_string()),
+            config: crate::config::Config::default(),
+        };
+
+        let project_dir = PathBuf::from("/tmp/test/projects/my-project");
+        let storage = config.storage_path(&project_dir, "default");
+
+        // Safe relative path should be allowed
+        assert!(
+            storage.to_str().unwrap().ends_with("custom_storage")
+                || storage.to_str().unwrap().contains("custom_storage"),
+            "Safe relative storage_dir should be allowed, got: {:?}",
+            storage
+        );
+    }
+}
+
+#[cfg(test)]
 mod config_merge_tests {
     use crate::config::{Config, ConfigResolver, ContextConfig, ProjectConfig, ResolveOptions};
     use std::path::PathBuf;

@@ -87,14 +87,77 @@ impl ContextConfig {
     }
 
     /// Get storage directory path for this context
+    ///
+    /// # Security
+    /// Validates that custom storage_dir paths do not escape the context directory
+    /// via path traversal attacks (e.g., "../../escape")
     pub fn storage_path(&self, project_dir: &Path, context_name: &str) -> PathBuf {
         let context_dir = project_dir.join("contexts").join(context_name);
+
         if let Some(ref custom_storage) = self.storage_dir {
             let storage_path = PathBuf::from(custom_storage);
+
+            // Reject absolute paths - they bypass context isolation
             if storage_path.is_absolute() {
-                storage_path
-            } else {
-                context_dir.join(custom_storage)
+                eprintln!(
+                    "Warning: Ignoring absolute storage_dir '{}', using default",
+                    custom_storage
+                );
+                return context_dir.join("storage");
+            }
+
+            // Construct candidate path
+            let candidate = context_dir.join(&storage_path);
+
+            // Validate that candidate stays within context_dir
+            // We need to create the context_dir first to canonicalize it
+            if let Err(e) = std::fs::create_dir_all(&context_dir) {
+                eprintln!(
+                    "Warning: Failed to create context dir for validation: {}",
+                    e
+                );
+                return context_dir.join("storage");
+            }
+
+            // Canonicalize both paths for comparison
+            match (context_dir.canonicalize(), candidate.canonicalize().or_else(|_| {
+                // If candidate doesn't exist, canonicalize its parent and append filename
+                if let Some(parent) = candidate.parent() {
+                    std::fs::create_dir_all(parent).ok();
+                    parent.canonicalize().map(|p| {
+                        if let Some(name) = candidate.file_name() {
+                            p.join(name)
+                        } else {
+                            p
+                        }
+                    })
+                } else {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "Invalid path",
+                    ))
+                }
+            })) {
+                (Ok(canonical_context), Ok(canonical_candidate)) => {
+                    // Check if candidate is within context_dir
+                    if canonical_candidate.starts_with(&canonical_context) {
+                        canonical_candidate
+                    } else {
+                        eprintln!(
+                            "Warning: storage_dir '{}' escapes context directory, using default",
+                            custom_storage
+                        );
+                        context_dir.join("storage")
+                    }
+                }
+                _ => {
+                    // Canonicalization failed, use safe default
+                    eprintln!(
+                        "Warning: Could not validate storage_dir '{}', using default",
+                        custom_storage
+                    );
+                    context_dir.join("storage")
+                }
             }
         } else {
             context_dir.join("storage")

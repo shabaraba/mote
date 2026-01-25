@@ -118,12 +118,36 @@ pub fn cmd_context(config_resolver: &ConfigResolver, command: ContextCommands) -
             );
         }
         ContextCommands::Delete { name } => {
-            if name == "default" {
-                return Err(crate::error::MoteError::ConfigRead(
-                    "Cannot delete default context".to_string()
+            // Validate name before constructing path to prevent traversal attacks
+            if name.is_empty() {
+                return Err(crate::error::MoteError::InvalidName(
+                    "Context name cannot be empty".to_string(),
                 ));
             }
 
+            // Reject path traversal attempts
+            if name.contains("..") || name.contains('/') || name.contains('\\') {
+                return Err(crate::error::MoteError::InvalidName(format!(
+                    "Invalid context name: '{}'",
+                    name
+                )));
+            }
+
+            // Reject absolute paths
+            if name.starts_with('/') || name.starts_with('\\') {
+                return Err(crate::error::MoteError::InvalidName(format!(
+                    "Context name cannot be absolute: '{}'",
+                    name
+                )));
+            }
+
+            if name == "default" {
+                return Err(crate::error::MoteError::ConfigRead(
+                    "Cannot delete default context".to_string(),
+                ));
+            }
+
+            // Now safe to construct path
             let context_dir = project_dir.join("contexts").join(&name);
             if !context_dir.exists() {
                 return Err(crate::error::MoteError::ContextNotFound(name));

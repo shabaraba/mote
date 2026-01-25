@@ -192,18 +192,27 @@ impl Config {
         dirs::config_dir().map(|p| p.join("mote").join("config.toml"))
     }
 
+    /// Load global configuration from default path
+    ///
+    /// Note: Prefer using `load_from_path` with an explicit config_dir
+    #[allow(dead_code)]
     pub fn load() -> Result<Self> {
         let config_path = match Self::global_config_path() {
             Some(p) => p,
             None => return Ok(Self::default()),
         };
 
+        Self::load_from_path(&config_path)
+    }
+
+    /// Load configuration from a specific path
+    pub fn load_from_path(config_path: &std::path::Path) -> Result<Self> {
         if !config_path.exists() {
             return Ok(Self::default());
         }
 
         let content =
-            fs::read_to_string(&config_path).map_err(|e| MoteError::ConfigRead(e.to_string()))?;
+            fs::read_to_string(config_path).map_err(|e| MoteError::ConfigRead(e.to_string()))?;
 
         let config: Config = toml::from_str(&content)?;
         Ok(config)

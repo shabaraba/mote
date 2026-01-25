@@ -73,8 +73,9 @@ impl ConfigResolver {
             .or_else(|| Config::global_config_path().map(|p| p.parent().unwrap().to_path_buf()))
             .unwrap_or_else(|| PathBuf::from(".config/mote"));
 
-        // Load global config
-        let global_config = Config::load()?;
+        // Load global config from the determined config_dir
+        let global_config_path = config_dir.join("config.toml");
+        let global_config = Config::load_from_path(&global_config_path)?;
 
         // Resolve project
         let (project_name, project_config) = if let Some(ref name) = opts.project {
@@ -97,7 +98,21 @@ impl ConfigResolver {
             (&project_name, &project_config)
         {
             let project_dir = config_dir.join("projects").join(proj_name);
-            ContextConfig::load(&project_dir, &context_name).ok()
+
+            // If context was explicitly specified, propagate errors
+            // If using default context, allow it to be missing
+            match ContextConfig::load(&project_dir, &context_name) {
+                Ok(config) => Some(config),
+                Err(e) => {
+                    if opts.context.is_some() {
+                        // Explicit context requested but failed to load - propagate error
+                        return Err(e);
+                    } else {
+                        // Default context doesn't exist yet - that's ok
+                        None
+                    }
+                }
+            }
         } else {
             None
         };
@@ -170,9 +185,35 @@ impl ConfigResolver {
     }
 
     /// Merge source config into target (source takes precedence)
-    fn merge_config(_target: &mut Config, _source: &Config) {
-        // For now, we don't actually merge individual fields
-        // since we're using the flattened structure.
-        // In the future, this could merge specific fields if needed.
+    ///
+    /// Since Config fields all have defaults, we perform a simple override:
+    /// any non-default values in source replace the corresponding fields in target.
+    ///
+    /// Note: Current implementation does a full field replacement.
+    /// For more granular control, individual config sections could be made Optional.
+    fn merge_config(target: &mut Config, source: &Config) {
+        // For storage config, override if source differs from default
+        let default_storage = crate::config::StorageConfig::default();
+        if source.storage.location_strategy != default_storage.location_strategy {
+            target.storage.location_strategy = source.storage.location_strategy.clone();
+        }
+
+        // For snapshot config, override each field if different from default
+        let default_snapshot = crate::config::SnapshotConfig::default();
+        if source.snapshot.auto_cleanup != default_snapshot.auto_cleanup {
+            target.snapshot.auto_cleanup = source.snapshot.auto_cleanup;
+        }
+        if source.snapshot.max_snapshots != default_snapshot.max_snapshots {
+            target.snapshot.max_snapshots = source.snapshot.max_snapshots;
+        }
+        if source.snapshot.max_age_days != default_snapshot.max_age_days {
+            target.snapshot.max_age_days = source.snapshot.max_age_days;
+        }
+
+        // For ignore config, override if different from default
+        let default_ignore = crate::config::IgnoreConfig::default();
+        if source.ignore.ignore_file != default_ignore.ignore_file {
+            target.ignore.ignore_file = source.ignore.ignore_file.clone();
+        }
     }
 }
