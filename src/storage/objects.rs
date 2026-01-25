@@ -5,17 +5,15 @@ use std::path::{Path, PathBuf};
 
 use crate::error::{MoteError, Result};
 
+const COMPRESSION_LEVEL: i32 = 3;
+
 pub struct ObjectStore {
     objects_dir: PathBuf,
-    compression_level: i32,
 }
 
 impl ObjectStore {
-    pub fn new(objects_dir: PathBuf, compression_level: i32) -> Self {
-        Self {
-            objects_dir,
-            compression_level,
-        }
+    pub fn new(objects_dir: PathBuf) -> Self {
+        Self { objects_dir }
     }
 
     pub fn store(&self, content: &[u8]) -> Result<String> {
@@ -30,7 +28,7 @@ impl ObjectStore {
             fs::create_dir_all(parent)?;
         }
 
-        let compressed = zstd::encode_all(content, self.compression_level)?;
+        let compressed = zstd::encode_all(content, COMPRESSION_LEVEL)?;
         fs::write(&object_path, compressed)?;
 
         Ok(hash)
