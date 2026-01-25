@@ -1,0 +1,363 @@
+// New commands for project/context management
+
+use std::path::{Path, PathBuf};
+use colored::*;
+
+use crate::config::{Config, ConfigResolver, ContextConfig, ProjectConfig};
+use crate::error::Result;
+use crate::ignore::create_ignore_file;
+use crate::cli::{ContextCommands, IgnoreCommands};
+
+/// Initialize a new project with context structure
+pub fn cmd_init_project(
+    config_resolver: &ConfigResolver,
+    project_name: &str,
+    cwd: Option<PathBuf>,
+    context: Option<String>,
+    max_snapshots: Option<u32>,
+    max_age_days: Option<u32>,
+    storage_dir: Option<PathBuf>,
+) -> Result<()> {
+    let config_dir = config_resolver.config_dir();
+    let project_path = cwd.unwrap_or_else(|| std::env::current_dir().expect("Failed to get current directory"));
+    let context_name = context.unwrap_or_else(|| "default".to_string());
+
+    // Create project config
+    let mut project_config = ProjectConfig {
+        path: project_path.canonicalize().unwrap_or(project_path.clone()),
+        config: Config::default(),
+    };
+
+    // Override snapshot settings if provided
+    if let Some(max_snap) = max_snapshots {
+        project_config.config.snapshot.max_snapshots = max_snap;
+    }
+    if let Some(max_age) = max_age_days {
+        project_config.config.snapshot.max_age_days = max_age;
+    }
+
+    project_config.save(config_dir, project_name)?;
+
+    // Create default context
+    let context_config = ContextConfig {
+        cwd: Some(project_path.clone()),
+        storage_dir: storage_dir.map(|p| p.to_string_lossy().to_string()),
+        config: Config::default(),
+    };
+
+    let project_dir = config_dir.join("projects").join(project_name);
+    context_config.save(&project_dir, &context_name)?;
+
+    // Create ignore file
+    let ignore_path = context_config.ignore_path(&project_dir, &context_name);
+    create_ignore_file(&ignore_path)?;
+
+    println!(
+        "{} Initialized project '{}' with context '{}'",
+        "✓".green().bold(),
+        project_name,
+        context_name
+    );
+    println!(
+        "  Project path: {}",
+        project_path.display().to_string().cyan()
+    );
+    println!(
+        "  Config dir: {}",
+        config_dir.join("projects").join(project_name).display().to_string().cyan()
+    );
+
+    Ok(())
+}
+
+/// Manage contexts
+pub fn cmd_context(config_resolver: &ConfigResolver, command: ContextCommands) -> Result<()> {
+    let config_dir = config_resolver.config_dir();
+    let project_name = config_resolver
+        .project_name()
+        .ok_or_else(|| crate::error::MoteError::ConfigRead(
+            "No project specified or detected. Use --project or run from project directory.".to_string()
+        ))?;
+
+    let project_dir = config_dir.join("projects").join(project_name);
+
+    match command {
+        ContextCommands::List => {
+            let contexts = ContextConfig::list(&project_dir)?;
+            if contexts.is_empty() {
+                println!("{} No contexts found", "!".yellow().bold());
+            } else {
+                println!("Contexts for project '{}':", project_name);
+                for ctx in contexts {
+                    if ctx == "default" {
+                        println!("  {} (default)", ctx.cyan());
+                    } else {
+                        println!("  {}", ctx.cyan());
+                    }
+                }
+            }
+        }
+        ContextCommands::New { name, cwd, storage_dir } => {
+            let context_config = ContextConfig {
+                cwd,
+                storage_dir: storage_dir.map(|p| p.to_string_lossy().to_string()),
+                config: Config::default(),
+            };
+
+            context_config.save(&project_dir, &name)?;
+
+            // Create ignore file
+            let ignore_path = context_config.ignore_path(&project_dir, &name);
+            create_ignore_file(&ignore_path)?;
+
+            println!(
+                "{} Created context '{}' for project '{}'",
+                "✓".green().bold(),
+                name,
+                project_name
+            );
+        }
+        ContextCommands::Delete { name } => {
+            if name == "default" {
+                return Err(crate::error::MoteError::ConfigRead(
+                    "Cannot delete default context".to_string()
+                ));
+            }
+
+            let context_dir = project_dir.join("contexts").join(&name);
+            if !context_dir.exists() {
+                return Err(crate::error::MoteError::ContextNotFound(name));
+            }
+
+            std::fs::remove_dir_all(&context_dir)?;
+
+            println!(
+                "{} Deleted context '{}' from project '{}'",
+                "✓".green().bold(),
+                name,
+                project_name
+            );
+        }
+    }
+
+    Ok(())
+}
+
+/// Manage ignore patterns
+pub fn cmd_ignore(ctx: &crate::Context, command: IgnoreCommands) -> Result<()> {
+    let ignore_path = &ctx.ignore_file_path;
+
+    match command {
+        IgnoreCommands::List => {
+            if !ignore_path.exists() {
+                println!("{} No ignore file found", "!".yellow().bold());
+                return Ok(());
+            }
+
+            let content = std::fs::read_to_string(ignore_path)?;
+            println!("Ignore patterns in {}:", ignore_path.display());
+            println!("{}", content);
+        }
+        IgnoreCommands::Add { pattern } => {
+            let mut content = if ignore_path.exists() {
+                std::fs::read_to_string(ignore_path)?
+            } else {
+                String::new()
+            };
+
+            if !content.ends_with('\n') && !content.is_empty() {
+                content.push('\n');
+            }
+            content.push_str(&pattern);
+            content.push('\n');
+
+            std::fs::write(ignore_path, content)?;
+
+            println!(
+                "{} Added pattern '{}' to {}",
+                "✓".green().bold(),
+                pattern,
+                ignore_path.display()
+            );
+        }
+        IgnoreCommands::Remove { pattern } => {
+            if !ignore_path.exists() {
+                println!("{} No ignore file found", "!".yellow().bold());
+                return Ok(());
+            }
+
+            let content = std::fs::read_to_string(ignore_path)?;
+            let lines: Vec<&str> = content.lines().collect();
+            let filtered: Vec<&str> = lines
+                .into_iter()
+                .filter(|line| line.trim() != pattern.trim())
+                .collect();
+
+            std::fs::write(ignore_path, filtered.join("\n") + "\n")?;
+
+            println!(
+                "{} Removed pattern '{}' from {}",
+                "✓".green().bold(),
+                pattern,
+                ignore_path.display()
+            );
+        }
+        IgnoreCommands::Edit => {
+            let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+
+            if !ignore_path.exists() {
+                create_ignore_file(ignore_path)?;
+            }
+
+            let status = std::process::Command::new(&editor)
+                .arg(ignore_path)
+                .status()?;
+
+            if !status.success() {
+                return Err(crate::error::MoteError::ConfigRead(format!(
+                    "Editor '{}' exited with error",
+                    editor
+                )));
+            }
+
+            println!("{} Edited {}", "✓".green().bold(), ignore_path.display());
+        }
+    }
+
+    Ok(())
+}
+
+/// Migrate existing .mote directory to new structure
+pub fn cmd_migrate(
+    project_root: &Path,
+    config_resolver: &ConfigResolver,
+    dry_run: bool,
+) -> Result<()> {
+    let old_mote_dir = project_root.join(".mote");
+
+    if !old_mote_dir.exists() {
+        println!("{} No .mote directory found to migrate", "!".yellow().bold());
+        return Ok(());
+    }
+
+    // Detect project name from directory name
+    let project_name = project_root
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("migrated-project");
+
+    println!("Migrating .mote/ to new structure...");
+    println!("  Project name: {}", project_name.cyan());
+    println!("  Source: {}", old_mote_dir.display());
+
+    let config_dir = config_resolver.config_dir();
+    let new_project_dir = config_dir.join("projects").join(project_name);
+    let new_context_dir = new_project_dir.join("contexts").join("default");
+    let new_storage_dir = new_context_dir.join("storage");
+
+    println!("  Destination: {}", new_storage_dir.display());
+
+    if dry_run {
+        println!("\n{} Dry run - no changes made", "i".cyan().bold());
+        return Ok(());
+    }
+
+    // Create project
+    let project_config = ProjectConfig {
+        path: project_root.canonicalize().unwrap_or_else(|_| project_root.to_path_buf()),
+        config: Config::default(),
+    };
+    project_config.save(config_dir, project_name)?;
+
+    // Create context
+    let context_config = ContextConfig {
+        cwd: Some(project_root.to_path_buf()),
+        storage_dir: None,
+        config: Config::default(),
+    };
+    context_config.save(&new_project_dir, "default")?;
+
+    // Move .mote contents to new location
+    for entry in std::fs::read_dir(&old_mote_dir)? {
+        let entry = entry?;
+        let dest = new_storage_dir.join(entry.file_name());
+        if entry.path().is_dir() {
+            copy_dir_all(&entry.path(), &dest)?;
+        } else {
+            std::fs::create_dir_all(&new_storage_dir)?;
+            std::fs::copy(&entry.path(), &dest)?;
+        }
+    }
+
+    // Create ignore file
+    let old_ignore = project_root.join(".moteignore");
+    let new_ignore = new_context_dir.join("ignore");
+
+    if old_ignore.exists() {
+        std::fs::copy(&old_ignore, &new_ignore)?;
+        println!("  Copied .moteignore to context");
+    } else {
+        create_ignore_file(&new_ignore)?;
+    }
+
+    println!(
+        "\n{} Migration complete!",
+        "✓".green().bold()
+    );
+    println!("  You can now remove the old .mote/ directory");
+    println!("  Use: -p {} -c default for future commands", project_name);
+
+    Ok(())
+}
+
+/// Recursively copy directory contents with security checks
+///
+/// # Security features:
+/// - Symlinks are skipped (not followed) to prevent path traversal
+/// - Validates that destination is not a subdirectory of source
+/// - Only copies regular files and directories
+fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+    // Normalize paths to prevent traversal attacks
+    let src_canonical = src.canonicalize()?;
+
+    // Create destination directory if it doesn't exist
+    std::fs::create_dir_all(dst)?;
+
+    // Check if destination would be inside source (prevent infinite loop)
+    if let Ok(dst_canonical) = dst.canonicalize() {
+        if dst_canonical.starts_with(&src_canonical) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Destination cannot be a subdirectory of source",
+            ));
+        }
+    }
+
+    copy_dir_all_impl(&src_canonical, dst)
+}
+
+fn copy_dir_all_impl(src: &Path, dst: &Path) -> std::io::Result<()> {
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+
+        // Get metadata without following symlinks
+        let metadata = entry.metadata()?;
+
+        // Skip symlinks for security (don't follow them)
+        if metadata.is_symlink() {
+            eprintln!("Warning: Skipping symbolic link: {:?}", src_path);
+            continue;
+        }
+
+        if metadata.is_dir() {
+            std::fs::create_dir_all(&dst_path)?;
+            copy_dir_all_impl(&src_path, &dst_path)?;
+        } else if metadata.is_file() {
+            std::fs::copy(&src_path, &dst_path)?;
+        }
+        // Ignore other file types (devices, sockets, etc.)
+    }
+    Ok(())
+}
