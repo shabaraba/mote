@@ -40,6 +40,21 @@ pub enum MoteError {
 
     #[error("TOML parse error: {0}")]
     TomlParse(#[from] toml::de::Error),
+
+    #[error("Project not found: {0}")]
+    ProjectNotFound(String),
+
+    #[error("Context not found: {0}")]
+    ContextNotFound(String),
+
+    #[error("Project already exists: {0}")]
+    ProjectAlreadyExists(String),
+
+    #[error("Context already exists: {0}")]
+    ContextAlreadyExists(String),
+
+    #[error("Invalid name: {0}")]
+    InvalidName(String),
 }
 
 pub type Result<T> = std::result::Result<T, MoteError>;
