@@ -99,14 +99,18 @@ impl ConfigResolver {
         // Resolve context
         let context_name = opts.context.clone().unwrap_or_else(|| "default".to_string());
 
-        let context_config = if let (Some(ref proj_name), Some(ref _proj_config)) =
+        let context_config = if let (Some(ref proj_name), Some(ref proj_config)) =
             (&project_name, &project_config)
         {
             let project_dir = config_dir.join("projects").join(proj_name);
 
+            // Get context directory from project config (handles custom context_dir)
+            let context_dir_override = proj_config.contexts.as_ref()
+                .and_then(|contexts| contexts.get(&context_name));
+
             // If context was explicitly specified, propagate errors
             // If using default context, allow it to be missing
-            match ContextConfig::load(&project_dir, &context_name) {
+            match ContextConfig::load(&project_dir, &context_name, context_dir_override) {
                 Ok(config) => Some(config),
                 Err(e) => {
                     if opts.context.is_some() {
@@ -149,13 +153,25 @@ impl ConfigResolver {
         result
     }
 
-    /// Get context storage directory (if context is configured)
-    pub fn context_storage_dir(&self) -> Option<PathBuf> {
-        if let (Some(ref project_name), Some(ref context)) =
-            (&self.project_name, &self.context_config)
+    /// Get context directory path
+    pub fn context_dir(&self) -> Option<PathBuf> {
+        if let (Some(ref project_name), Some(ref project_config)) =
+            (&self.project_name, &self.project_config)
         {
             let project_dir = self.config_dir.join("projects").join(project_name);
-            Some(context.storage_path(&project_dir, &self.context_name))
+            Some(project_config.get_context_dir(&project_dir, &self.context_name))
+        } else {
+            None
+        }
+    }
+
+    /// Get context storage directory (if context is configured)
+    pub fn context_storage_dir(&self) -> Option<PathBuf> {
+        if let (Some(ref _project_name), Some(ref context)) =
+            (&self.project_name, &self.context_config)
+        {
+            let context_dir = self.context_dir()?;
+            Some(context.storage_path(&context_dir))
         } else {
             None
         }
@@ -163,11 +179,11 @@ impl ConfigResolver {
 
     /// Get context ignore file path (if context is configured)
     pub fn context_ignore_path(&self) -> Option<PathBuf> {
-        if let (Some(ref project_name), Some(ref context)) =
+        if let (Some(ref _project_name), Some(ref context)) =
             (&self.project_name, &self.context_config)
         {
-            let project_dir = self.config_dir.join("projects").join(project_name);
-            Some(context.ignore_path(&project_dir, &self.context_name))
+            let context_dir = self.context_dir()?;
+            Some(context.ignore_path(&context_dir))
         } else {
             None
         }

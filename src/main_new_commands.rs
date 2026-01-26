@@ -35,33 +35,48 @@ pub fn cmd_context(config_resolver: &ConfigResolver, command: ContextCommands) -
                 }
             }
         }
-        ContextCommands::New { name, cwd, storage_dir } => {
-            // If project doesn't exist, create it automatically
-            if !project_dir.exists() {
+        ContextCommands::New { name, cwd, context_dir } => {
+            // Load or create project config
+            let mut project_config = if project_dir.exists() {
+                ProjectConfig::load(config_dir, project_name)?
+            } else {
+                // Create new project
                 let project_cwd = cwd.clone().unwrap_or_else(|| std::env::current_dir().expect("Failed to get current directory"));
-                let project_config = ProjectConfig {
+                let config = ProjectConfig {
                     path: project_cwd.canonicalize().unwrap_or(project_cwd),
+                    contexts: None,
                     config: Config::default(),
                 };
-                project_config.save(config_dir, project_name)?;
+                config.save(config_dir, project_name)?;
 
                 println!(
                     "{} Created project '{}'",
                     "✓".green().bold(),
                     project_name
                 );
-            }
+                config
+            };
+
+            // Determine actual context directory
+            let actual_context_dir = if let Some(custom_dir) = context_dir.clone() {
+                // Register custom context directory in project config
+                project_config.register_context(name.clone(), custom_dir.clone());
+                project_config.save(config_dir, project_name)?;
+                custom_dir
+            } else {
+                project_dir.join("contexts").join(&name)
+            };
 
             let context_config = ContextConfig {
                 cwd,
-                storage_dir: storage_dir.map(|p| p.to_string_lossy().to_string()),
+                context_dir,
                 config: Config::default(),
             };
 
             context_config.save(&project_dir, &name)?;
 
             // Create ignore file
-            let ignore_path = context_config.ignore_path(&project_dir, &name);
+            let ignore_path = context_config.ignore_path(&actual_context_dir);
             create_ignore_file(&ignore_path)?;
 
             println!(
@@ -70,6 +85,12 @@ pub fn cmd_context(config_resolver: &ConfigResolver, command: ContextCommands) -
                 name,
                 project_name
             );
+            if context_config.context_dir.is_some() {
+                println!(
+                    "  Context directory: {}",
+                    actual_context_dir.display().to_string().cyan()
+                );
+            }
         }
         ContextCommands::Delete { name } => {
             // Validate name before constructing path to prevent traversal attacks
@@ -101,13 +122,19 @@ pub fn cmd_context(config_resolver: &ConfigResolver, command: ContextCommands) -
                 ));
             }
 
-            // Now safe to construct path
-            let context_dir = project_dir.join("contexts").join(&name);
+            // Load project config to get context directory
+            let mut project_config = ProjectConfig::load(config_dir, project_name)?;
+            let context_dir = project_config.get_context_dir(&project_dir, &name);
+
             if !context_dir.exists() {
                 return Err(crate::error::MoteError::ContextNotFound(name));
             }
 
             std::fs::remove_dir_all(&context_dir)?;
+
+            // Unregister from project config if it was custom
+            project_config.unregister_context(&name);
+            project_config.save(config_dir, project_name)?;
 
             println!(
                 "{} Deleted context '{}' from project '{}'",
@@ -243,6 +270,7 @@ pub fn cmd_migrate(
     // Create project
     let project_config = ProjectConfig {
         path: project_root.canonicalize().unwrap_or_else(|_| project_root.to_path_buf()),
+        contexts: None,
         config: Config::default(),
     };
     project_config.save(config_dir, project_name)?;
@@ -250,7 +278,7 @@ pub fn cmd_migrate(
     // Create context
     let context_config = ContextConfig {
         cwd: Some(project_root.to_path_buf()),
-        storage_dir: None,
+        context_dir: None,
         config: Config::default(),
     };
     context_config.save(&new_project_dir, "default")?;

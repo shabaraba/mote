@@ -9,18 +9,25 @@ use crate::error::{MoteError, Result};
 pub struct ContextConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cwd: Option<PathBuf>,
+    /// Custom context directory (if specified, context is stored here instead of default location)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub storage_dir: Option<String>,
+    pub context_dir: Option<PathBuf>,
     #[serde(flatten)]
     pub config: Config,
 }
 
 impl ContextConfig {
     /// Load context configuration
-    pub fn load(project_dir: &Path, context_name: &str) -> Result<Self> {
+    /// context_dir_override: Custom context directory (from ProjectConfig.contexts map)
+    pub fn load(project_dir: &Path, context_name: &str, context_dir_override: Option<&PathBuf>) -> Result<Self> {
         Self::validate_name(context_name)?;
 
-        let context_dir = project_dir.join("contexts").join(context_name);
+        let context_dir = if let Some(custom_dir) = context_dir_override {
+            custom_dir.clone()
+        } else {
+            project_dir.join("contexts").join(context_name)
+        };
+
         let config_path = context_dir.join("config.toml");
 
         if !config_path.exists() {
@@ -35,10 +42,17 @@ impl ContextConfig {
     }
 
     /// Save context configuration
+    /// If context_dir is specified in the config, saves to that location
+    /// Otherwise saves to default location: project_dir/contexts/<name>
     pub fn save(&self, project_dir: &Path, context_name: &str) -> Result<()> {
         Self::validate_name(context_name)?;
 
-        let context_dir = project_dir.join("contexts").join(context_name);
+        // Determine where to save the context
+        let context_dir = if let Some(ref custom_dir) = self.context_dir {
+            custom_dir.clone()
+        } else {
+            project_dir.join("contexts").join(context_name)
+        };
 
         if context_dir.exists() {
             let config_path = context_dir.join("config.toml");
@@ -87,86 +101,13 @@ impl ContextConfig {
     }
 
     /// Get storage directory path for this context
-    ///
-    /// # Security
-    /// Validates that custom storage_dir paths do not escape the context directory
-    /// via path traversal attacks (e.g., "../../escape")
-    pub fn storage_path(&self, project_dir: &Path, context_name: &str) -> PathBuf {
-        let context_dir = project_dir.join("contexts").join(context_name);
-
-        if let Some(ref custom_storage) = self.storage_dir {
-            let storage_path = PathBuf::from(custom_storage);
-
-            // Reject absolute paths - they bypass context isolation
-            if storage_path.is_absolute() {
-                eprintln!(
-                    "Warning: Ignoring absolute storage_dir '{}', using default",
-                    custom_storage
-                );
-                return context_dir.join("storage");
-            }
-
-            // Construct candidate path
-            let candidate = context_dir.join(&storage_path);
-
-            // Validate that candidate stays within context_dir
-            // We need to create the context_dir first to canonicalize it
-            if let Err(e) = std::fs::create_dir_all(&context_dir) {
-                eprintln!(
-                    "Warning: Failed to create context dir for validation: {}",
-                    e
-                );
-                return context_dir.join("storage");
-            }
-
-            // Canonicalize both paths for comparison
-            match (context_dir.canonicalize(), candidate.canonicalize().or_else(|_| {
-                // If candidate doesn't exist, canonicalize its parent and append filename
-                if let Some(parent) = candidate.parent() {
-                    std::fs::create_dir_all(parent).ok();
-                    parent.canonicalize().map(|p| {
-                        if let Some(name) = candidate.file_name() {
-                            p.join(name)
-                        } else {
-                            p
-                        }
-                    })
-                } else {
-                    Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
-                        "Invalid path",
-                    ))
-                }
-            })) {
-                (Ok(canonical_context), Ok(canonical_candidate)) => {
-                    // Check if candidate is within context_dir
-                    if canonical_candidate.starts_with(&canonical_context) {
-                        canonical_candidate
-                    } else {
-                        eprintln!(
-                            "Warning: storage_dir '{}' escapes context directory, using default",
-                            custom_storage
-                        );
-                        context_dir.join("storage")
-                    }
-                }
-                _ => {
-                    // Canonicalization failed, use safe default
-                    eprintln!(
-                        "Warning: Could not validate storage_dir '{}', using default",
-                        custom_storage
-                    );
-                    context_dir.join("storage")
-                }
-            }
-        } else {
-            context_dir.join("storage")
-        }
+    /// Storage is always at context_dir/storage/
+    pub fn storage_path(&self, context_dir: &Path) -> PathBuf {
+        context_dir.join("storage")
     }
 
     /// Get ignore file path for this context
-    pub fn ignore_path(&self, project_dir: &Path, context_name: &str) -> PathBuf {
-        let context_dir = project_dir.join("contexts").join(context_name);
+    pub fn ignore_path(&self, context_dir: &Path) -> PathBuf {
         context_dir.join("ignore")
     }
 

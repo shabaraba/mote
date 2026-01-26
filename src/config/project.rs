@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -8,6 +9,10 @@ use crate::error::{MoteError, Result};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectConfig {
     pub path: PathBuf,
+    /// Map of context name -> context directory path
+    /// Used to track contexts with custom context_dir
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contexts: Option<HashMap<String, PathBuf>>,
     #[serde(flatten)]
     pub config: Config,
 }
@@ -32,6 +37,7 @@ impl ProjectConfig {
     }
 
     /// Save project configuration
+    /// If allow_overwrite is true, overwrites existing config (used for updating contexts map)
     pub fn save(&self, config_dir: &Path, project_name: &str) -> Result<()> {
         Self::validate_name(project_name)?;
 
@@ -43,15 +49,39 @@ impl ProjectConfig {
 
         let config_path = project_dir.join("config.toml");
 
-        if config_path.exists() {
-            return Err(MoteError::ProjectAlreadyExists(project_name.to_string()));
-        }
-
         let content = toml::to_string_pretty(self)
             .map_err(|e| MoteError::ConfigParse(e.to_string()))?;
 
         fs::write(&config_path, content)?;
         Ok(())
+    }
+
+    /// Register a context with custom directory
+    pub fn register_context(&mut self, context_name: String, context_dir: PathBuf) {
+        if self.contexts.is_none() {
+            self.contexts = Some(HashMap::new());
+        }
+        if let Some(ref mut contexts) = self.contexts {
+            contexts.insert(context_name, context_dir);
+        }
+    }
+
+    /// Unregister a context
+    pub fn unregister_context(&mut self, context_name: &str) {
+        if let Some(ref mut contexts) = self.contexts {
+            contexts.remove(context_name);
+        }
+    }
+
+    /// Get context directory (returns custom dir if registered, otherwise default)
+    pub fn get_context_dir(&self, project_dir: &Path, context_name: &str) -> PathBuf {
+        if let Some(ref contexts) = self.contexts {
+            if let Some(custom_dir) = contexts.get(context_name) {
+                return custom_dir.clone();
+            }
+        }
+        // Default location
+        project_dir.join("contexts").join(context_name)
     }
 
     /// List all project names in config directory

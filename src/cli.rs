@@ -150,9 +150,10 @@ pub enum ContextCommands {
         #[arg(long)]
         cwd: Option<PathBuf>,
 
-        /// Storage directory (relative to context or absolute)
+        /// Context directory (where config, ignore, and storage are stored)
+        /// If not specified, uses default: ~/.config/mote/projects/<project>/contexts/<name>
         #[arg(long)]
-        storage_dir: Option<PathBuf>,
+        context_dir: Option<PathBuf>,
     },
 
     /// Delete a context

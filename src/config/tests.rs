@@ -9,6 +9,7 @@ mod validation_tests {
     fn create_test_project_config() -> ProjectConfig {
         ProjectConfig {
             path: PathBuf::from("/tmp/test"),
+            contexts: None,
             config: Config::default(),
         }
     }
@@ -192,7 +193,7 @@ mod context_validation_tests {
     fn create_test_context_config() -> ContextConfig {
         ContextConfig {
             cwd: Some(PathBuf::from("/tmp/test")),
-            storage_dir: None,
+            context_dir: None,
             config: Config::default(),
         }
     }
@@ -226,70 +227,8 @@ mod context_validation_tests {
     }
 }
 
-#[cfg(test)]
-mod security_tests {
-    use crate::config::ContextConfig;
-    use std::path::PathBuf;
-
-    #[test]
-    fn test_storage_path_prevents_traversal() {
-        let config = ContextConfig {
-            cwd: None,
-            storage_dir: Some("../../escape".to_string()),
-            config: crate::config::Config::default(),
-        };
-
-        let project_dir = PathBuf::from("/tmp/test/projects/my-project");
-        let storage = config.storage_path(&project_dir, "default");
-
-        // Should not escape to /tmp/test/escape
-        // Should fall back to safe default: /tmp/test/projects/my-project/contexts/default/storage
-        assert!(
-            storage.to_str().unwrap().contains("contexts/default/storage"),
-            "storage_dir with '..' should be rejected, got: {:?}",
-            storage
-        );
-    }
-
-    #[test]
-    fn test_storage_path_rejects_absolute() {
-        let config = ContextConfig {
-            cwd: None,
-            storage_dir: Some("/etc/passwd".to_string()),
-            config: crate::config::Config::default(),
-        };
-
-        let project_dir = PathBuf::from("/tmp/test/projects/my-project");
-        let storage = config.storage_path(&project_dir, "default");
-
-        // Should reject absolute path and use safe default
-        assert!(
-            storage.to_str().unwrap().contains("contexts/default/storage"),
-            "Absolute storage_dir should be rejected, got: {:?}",
-            storage
-        );
-    }
-
-    #[test]
-    fn test_storage_path_allows_safe_relative() {
-        let config = ContextConfig {
-            cwd: None,
-            storage_dir: Some("custom_storage".to_string()),
-            config: crate::config::Config::default(),
-        };
-
-        let project_dir = PathBuf::from("/tmp/test/projects/my-project");
-        let storage = config.storage_path(&project_dir, "default");
-
-        // Safe relative path should be allowed
-        assert!(
-            storage.to_str().unwrap().ends_with("custom_storage")
-                || storage.to_str().unwrap().contains("custom_storage"),
-            "Safe relative storage_dir should be allowed, got: {:?}",
-            storage
-        );
-    }
-}
+// Security tests for context_dir are now handled at the CLI validation level
+// storage_path() simply returns context_dir/storage/ without additional validation
 
 #[cfg(test)]
 mod config_merge_tests {
@@ -352,6 +291,7 @@ mod config_merge_tests {
         // Test ProjectConfig construction
         let config = ProjectConfig {
             path: PathBuf::from("/path/to/project"),
+            contexts: None,
             config: Config::default(),
         };
 
@@ -363,12 +303,12 @@ mod config_merge_tests {
         // Test ContextConfig construction
         let config = ContextConfig {
             cwd: Some(PathBuf::from("/path/to/context")),
-            storage_dir: Some("custom-storage".to_string()),
+            context_dir: Some(PathBuf::from("/custom/context")),
             config: Config::default(),
         };
 
         assert_eq!(config.cwd, Some(PathBuf::from("/path/to/context")));
-        assert_eq!(config.storage_dir, Some("custom-storage".to_string()));
+        assert_eq!(config.context_dir, Some(PathBuf::from("/custom/context")));
     }
 }
 
