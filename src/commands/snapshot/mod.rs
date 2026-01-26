@@ -48,7 +48,7 @@ pub fn cmd_snapshot(
 
     if auto {
         if let Ok(snapshots) = snapshot_store.list() {
-            if let Some(latest) = snapshots.first() {
+            if let Some(latest) = snapshots.iter().max_by_key(|s| s.timestamp) {
                 if have_same_file_hashes(&latest.files, &files) {
                     return Ok(());
                 }

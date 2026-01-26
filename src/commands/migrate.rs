@@ -21,17 +21,20 @@ pub fn cmd_migrate(
         return Ok(());
     }
 
-    let project_name = project_root
+    let mut project_name = project_root
         .file_name()
         .and_then(|n| n.to_str())
-        .unwrap_or("migrated-project");
+        .unwrap_or("migrated-project")
+        .to_string();
+
+    project_name = sanitize_project_name(&project_name);
 
     println!("Migrating .mote/ to new structure...");
     println!("  Project name: {}", project_name.cyan());
     println!("  Source: {}", old_mote_dir.display());
 
     let config_dir = config_resolver.config_dir();
-    let new_project_dir = config_dir.join("projects").join(project_name);
+    let new_project_dir = config_dir.join("projects").join(&project_name);
     let new_context_dir = new_project_dir.join("contexts").join("default");
     let new_storage_dir = new_context_dir.join("storage");
 
@@ -42,6 +45,8 @@ pub fn cmd_migrate(
         return Ok(());
     }
 
+    std::fs::create_dir_all(&new_storage_dir)?;
+
     let project_config = ProjectConfig {
         path: project_root
             .canonicalize()
@@ -49,7 +54,7 @@ pub fn cmd_migrate(
         contexts: None,
         config: Config::default(),
     };
-    project_config.save(config_dir, project_name)?;
+    project_config.save(config_dir, &project_name)?;
 
     let context_config = ContextConfig {
         cwd: Some(project_root.to_path_buf()),
@@ -64,7 +69,6 @@ pub fn cmd_migrate(
         if entry.path().is_dir() {
             copy_dir_all(&entry.path(), &dest)?;
         } else {
-            std::fs::create_dir_all(&new_storage_dir)?;
             std::fs::copy(&entry.path(), &dest)?;
         }
     }
@@ -84,6 +88,28 @@ pub fn cmd_migrate(
     println!("  Use: -p {} -c default for future commands", project_name);
 
     Ok(())
+}
+
+fn sanitize_project_name(name: &str) -> String {
+    let mut sanitized = String::new();
+
+    for c in name.chars() {
+        if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+            sanitized.push(c);
+        } else {
+            sanitized.push('_');
+        }
+    }
+
+    if sanitized.is_empty() || sanitized.starts_with(char::is_numeric) {
+        sanitized.insert(0, 'm');
+    }
+
+    if sanitized.len() > 255 {
+        sanitized.truncate(255);
+    }
+
+    sanitized
 }
 
 fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {

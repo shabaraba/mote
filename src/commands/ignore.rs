@@ -69,7 +69,18 @@ pub fn cmd_ignore(ignore_file_path: &Path, command: IgnoreCommands) -> Result<()
                 create_ignore_file(ignore_file_path)?;
             }
 
-            let status = std::process::Command::new(&editor)
+            let parts = shell_words::split(&editor).map_err(|e| {
+                crate::error::MoteError::ConfigRead(format!("Failed to parse EDITOR: {}", e))
+            })?;
+
+            if parts.is_empty() {
+                return Err(crate::error::MoteError::ConfigRead(
+                    "EDITOR variable is empty".to_string(),
+                ));
+            }
+
+            let status = std::process::Command::new(&parts[0])
+                .args(&parts[1..])
                 .arg(ignore_file_path)
                 .status()?;
 

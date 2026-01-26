@@ -25,7 +25,7 @@ pub fn collect_files(
             .to_string_lossy()
             .to_string();
 
-        let metadata = match fs::metadata(path) {
+        let metadata = match fs::symlink_metadata(path) {
             Ok(m) => m,
             Err(e) if !quiet => {
                 eprintln!(
@@ -38,6 +38,10 @@ pub fn collect_files(
             }
             Err(_) => continue,
         };
+
+        if metadata.file_type().is_symlink() {
+            continue;
+        }
 
         let mtime = match metadata.modified() {
             Ok(t) => t,

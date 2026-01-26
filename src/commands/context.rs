@@ -37,12 +37,21 @@ pub fn cmd_context(config_resolver: &ConfigResolver, command: ContextCommands) -
             cwd,
             context_dir,
         } => {
+            validate_context_name(&name)?;
+
             let mut project_config = if project_dir.exists() {
                 ProjectConfig::load(config_dir, project_name)?
             } else {
-                let project_cwd = cwd.clone().unwrap_or_else(|| {
-                    std::env::current_dir().expect("Failed to get current directory")
-                });
+                let project_cwd = if let Some(dir) = cwd.clone() {
+                    dir
+                } else {
+                    std::env::current_dir().map_err(|e| {
+                        crate::error::MoteError::ConfigRead(format!(
+                            "Failed to get current directory: {}",
+                            e
+                        ))
+                    })?
+                };
                 let config = ProjectConfig {
                     path: project_cwd.canonicalize().unwrap_or(project_cwd),
                     contexts: None,
@@ -130,9 +139,49 @@ fn validate_context_name(name: &str) -> Result<()> {
         ));
     }
 
+    if name.len() > 255 {
+        return Err(crate::error::MoteError::InvalidName(
+            "Context name must be 255 characters or less".to_string(),
+        ));
+    }
+
+    if name == "." || name == ".." {
+        return Err(crate::error::MoteError::InvalidName(
+            "Context name cannot be '.' or '..'".to_string(),
+        ));
+    }
+
     if name.contains("..") || name.contains('/') || name.contains('\\') {
         return Err(crate::error::MoteError::InvalidName(format!(
-            "Invalid context name: '{}'",
+            "Invalid context name '{}': cannot contain path separators or '..'",
+            name
+        )));
+    }
+
+    if name.ends_with(' ') || name.ends_with('.') {
+        return Err(crate::error::MoteError::InvalidName(format!(
+            "Invalid context name '{}': cannot end with space or dot",
+            name
+        )));
+    }
+
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+    {
+        return Err(crate::error::MoteError::InvalidName(format!(
+            "Invalid context name '{}': only ASCII letters, digits, hyphen, underscore, and dot allowed",
+            name
+        )));
+    }
+
+    let reserved_names = [
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
+        "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    ];
+    if reserved_names.contains(&name.to_uppercase().as_str()) {
+        return Err(crate::error::MoteError::InvalidName(format!(
+            "Invalid context name '{}': reserved device name on Windows",
             name
         )));
     }

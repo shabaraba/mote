@@ -33,7 +33,7 @@ fn run() -> Result<()> {
         &cli.command,
         Commands::Context {
             command: cli::ContextCommands::New { .. }
-        }
+        } | Commands::Migrate { .. }
     );
 
     let resolve_opts = ResolveOptions {

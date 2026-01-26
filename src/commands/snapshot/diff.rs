@@ -167,7 +167,18 @@ fn diff_with_working_dir(
         current_files.insert(relative_path.clone());
 
         if let Some(snapshot_file) = snapshot_files.get(relative_path.as_str()) {
-            let current_content = fs::read(path)?;
+            let current_content = match fs::read(path) {
+                Ok(content) => content,
+                Err(e) => {
+                    eprintln!(
+                        "{}: Failed to read {}: {}",
+                        "warning".yellow(),
+                        relative_path,
+                        e
+                    );
+                    continue;
+                }
+            };
             let current_hash = ObjectStore::compute_hash(&current_content);
             if current_hash != snapshot_file.hash {
                 if name_only {
@@ -186,7 +197,18 @@ fn diff_with_working_dir(
         } else if name_only {
             writeln!(output, "A\t{}", relative_path).unwrap();
         } else {
-            let current_content = fs::read(path)?;
+            let current_content = match fs::read(path) {
+                Ok(content) => content,
+                Err(e) => {
+                    eprintln!(
+                        "{}: Failed to read {}: {}",
+                        "warning".yellow(),
+                        relative_path,
+                        e
+                    );
+                    continue;
+                }
+            };
             generate_unified_diff_with_content(
                 object_store,
                 &relative_path,
