@@ -6,7 +6,6 @@ use crate::cli::IgnoreCommands;
 use crate::error::Result;
 use crate::ignore::create_ignore_file;
 
-/// Manage ignore patterns
 pub fn cmd_ignore(ignore_file_path: &Path, command: IgnoreCommands) -> Result<()> {
     match command {
         IgnoreCommands::List => {

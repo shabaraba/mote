@@ -6,7 +6,6 @@ use crate::config::{Config, ConfigResolver, ContextConfig, ProjectConfig};
 use crate::error::Result;
 use crate::ignore::create_ignore_file;
 
-/// Migrate existing .mote directory to new structure
 pub fn cmd_migrate(
     project_root: &Path,
     config_resolver: &ConfigResolver,
@@ -22,7 +21,6 @@ pub fn cmd_migrate(
         return Ok(());
     }
 
-    // Detect project name from directory name
     let project_name = project_root
         .file_name()
         .and_then(|n| n.to_str())
@@ -44,7 +42,6 @@ pub fn cmd_migrate(
         return Ok(());
     }
 
-    // Create project
     let project_config = ProjectConfig {
         path: project_root
             .canonicalize()
@@ -54,7 +51,6 @@ pub fn cmd_migrate(
     };
     project_config.save(config_dir, project_name)?;
 
-    // Create context
     let context_config = ContextConfig {
         cwd: Some(project_root.to_path_buf()),
         context_dir: None,
@@ -62,7 +58,6 @@ pub fn cmd_migrate(
     };
     context_config.save(&new_project_dir, "default")?;
 
-    // Move .mote contents to new location
     for entry in std::fs::read_dir(&old_mote_dir)? {
         let entry = entry?;
         let dest = new_storage_dir.join(entry.file_name());
@@ -74,7 +69,6 @@ pub fn cmd_migrate(
         }
     }
 
-    // Create ignore file
     let old_ignore = project_root.join(".moteignore");
     let new_ignore = new_context_dir.join("ignore");
 
@@ -92,20 +86,10 @@ pub fn cmd_migrate(
     Ok(())
 }
 
-/// Recursively copy directory contents with security checks
-///
-/// # Security features:
-/// - Symlinks are skipped (not followed) to prevent path traversal
-/// - Validates that destination is not a subdirectory of source
-/// - Only copies regular files and directories
 fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
-    // Normalize paths to prevent traversal attacks
     let src_canonical = src.canonicalize()?;
-
-    // Create destination directory if it doesn't exist
     std::fs::create_dir_all(dst)?;
 
-    // Check if destination would be inside source (prevent infinite loop)
     if let Ok(dst_canonical) = dst.canonicalize() {
         if dst_canonical.starts_with(&src_canonical) {
             return Err(std::io::Error::new(
@@ -123,11 +107,8 @@ fn copy_dir_all_impl(src: &Path, dst: &Path) -> std::io::Result<()> {
         let entry = entry?;
         let src_path = entry.path();
         let dst_path = dst.join(entry.file_name());
-
-        // Get metadata without following symlinks
         let metadata = entry.metadata()?;
 
-        // Skip symlinks for security (don't follow them)
         if metadata.is_symlink() {
             eprintln!("Warning: Skipping symbolic link: {:?}", src_path);
             continue;
@@ -139,7 +120,6 @@ fn copy_dir_all_impl(src: &Path, dst: &Path) -> std::io::Result<()> {
         } else if metadata.is_file() {
             std::fs::copy(&src_path, &dst_path)?;
         }
-        // Ignore other file types (devices, sockets, etc.)
     }
     Ok(())
 }

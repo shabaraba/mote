@@ -6,27 +6,14 @@ mod ignore;
 mod path_resolver;
 mod storage;
 
-use std::path::Path;
-
 use clap::Parser;
 use colored::*;
 
 use cli::{Cli, Commands};
-use config::{Config, ConfigResolver, ResolveOptions};
+use commands::CommandContext;
+use config::{ConfigResolver, ResolveOptions};
 use error::Result;
 use path_resolver::resolve_ignore_file_path;
-
-/// Context holding common parameters passed to command functions.
-struct Context<'a> {
-    /// The project root directory.
-    project_root: &'a Path,
-    /// The loaded configuration.
-    config: &'a Config,
-    /// Optional custom storage directory.
-    storage_dir: Option<&'a Path>,
-    /// Resolved ignore file path.
-    ignore_file_path: std::path::PathBuf,
-}
 
 fn main() {
     if let Err(e) = run() {
@@ -35,8 +22,6 @@ fn main() {
     }
 }
 
-/// Main entry point for command execution.
-/// Parses CLI arguments, resolves paths, and dispatches to appropriate command handlers.
 fn run() -> Result<()> {
     let cli = Cli::parse();
     let project_root = cli
@@ -44,7 +29,6 @@ fn run() -> Result<()> {
         .clone()
         .unwrap_or_else(|| std::env::current_dir().expect("Failed to get current directory"));
 
-    // Check if this is a context new command (allow missing project for auto-creation)
     let allow_missing_project = matches!(
         &cli.command,
         Commands::Context {
@@ -52,7 +36,6 @@ fn run() -> Result<()> {
         }
     );
 
-    // Resolve configuration using ConfigResolver
     let resolve_opts = ResolveOptions {
         config_dir: cli.config_dir.clone(),
         project: cli.project.clone(),
@@ -64,7 +47,6 @@ fn run() -> Result<()> {
     let config_resolver = ConfigResolver::load(&resolve_opts)?;
     let config = config_resolver.resolve();
 
-    // Resolve ignore file path (CLI > Context > Config default)
     let ignore_file_path = cli
         .ignore_file
         .clone()
@@ -73,14 +55,12 @@ fn run() -> Result<()> {
             resolve_ignore_file_path(&project_root, None, &config.ignore.ignore_file)
         });
 
-    // Normalize ignore_file_path to absolute path
     let ignore_file_path = if ignore_file_path.is_absolute() {
         ignore_file_path
     } else {
         project_root.join(ignore_file_path)
     };
 
-    // Resolve storage directory (CLI > Context > None)
     let resolved_storage_dir = cli
         .storage_dir
         .clone()
@@ -93,7 +73,7 @@ fn run() -> Result<()> {
             }
         });
 
-    let ctx = Context {
+    let ctx = CommandContext {
         project_root: &project_root,
         config: &config,
         storage_dir: resolved_storage_dir.as_deref(),
@@ -101,83 +81,28 @@ fn run() -> Result<()> {
     };
 
     match cli.command {
-        Commands::Init => {
-            let init_ctx = commands::init::Context {
-                project_root: ctx.project_root,
-                config: ctx.config,
-                storage_dir: ctx.storage_dir,
-                ignore_file_path: ctx.ignore_file_path,
-            };
-            commands::cmd_init(&init_ctx)
-        }
+        Commands::Init => commands::cmd_init(&ctx),
         Commands::Snapshot {
             message,
             trigger,
             auto,
-        } => {
-            let snapshot_ctx = commands::snapshot::Context {
-                project_root: ctx.project_root,
-                config: ctx.config,
-                storage_dir: ctx.storage_dir,
-                ignore_file_path: ctx.ignore_file_path,
-            };
-            commands::cmd_snapshot(&snapshot_ctx, message, trigger, auto)
-        }
+        } => commands::cmd_snapshot(&ctx, message, trigger, auto),
         Commands::SetupShell { shell } => commands::cmd_setup_shell(&shell),
-        Commands::Log { limit, oneline } => {
-            let snapshot_ctx = commands::snapshot::Context {
-                project_root: ctx.project_root,
-                config: ctx.config,
-                storage_dir: ctx.storage_dir,
-                ignore_file_path: ctx.ignore_file_path,
-            };
-            commands::cmd_log(&snapshot_ctx, limit, oneline)
-        }
-        Commands::Show { snapshot_id } => {
-            let snapshot_ctx = commands::snapshot::Context {
-                project_root: ctx.project_root,
-                config: ctx.config,
-                storage_dir: ctx.storage_dir,
-                ignore_file_path: ctx.ignore_file_path,
-            };
-            commands::cmd_show(&snapshot_ctx, &snapshot_id)
-        }
+        Commands::Log { limit, oneline } => commands::cmd_log(&ctx, limit, oneline),
+        Commands::Show { snapshot_id } => commands::cmd_show(&ctx, &snapshot_id),
         Commands::Diff {
             snapshot_id,
             snapshot_id2,
             name_only,
             output,
             unified,
-        } => {
-            let snapshot_ctx = commands::snapshot::Context {
-                project_root: ctx.project_root,
-                config: ctx.config,
-                storage_dir: ctx.storage_dir,
-                ignore_file_path: ctx.ignore_file_path,
-            };
-            commands::cmd_diff(
-                &snapshot_ctx,
-                snapshot_id,
-                snapshot_id2,
-                name_only,
-                output,
-                unified,
-            )
-        }
+        } => commands::cmd_diff(&ctx, snapshot_id, snapshot_id2, name_only, output, unified),
         Commands::Restore {
             snapshot_id,
             file,
             force,
             dry_run,
-        } => {
-            let snapshot_ctx = commands::snapshot::Context {
-                project_root: ctx.project_root,
-                config: ctx.config,
-                storage_dir: ctx.storage_dir,
-                ignore_file_path: ctx.ignore_file_path,
-            };
-            commands::cmd_restore(&snapshot_ctx, &snapshot_id, file, force, dry_run)
-        }
+        } => commands::cmd_restore(&ctx, &snapshot_id, file, force, dry_run),
         Commands::Context { command } => commands::cmd_context(&config_resolver, command),
         Commands::Ignore { command } => commands::cmd_ignore(&ignore_file_path, command),
         Commands::Migrate { dry_run } => {
