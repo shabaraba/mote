@@ -14,6 +14,9 @@ pub enum MoteError {
     #[error("Snapshot not found: {0}")]
     SnapshotNotFound(String),
 
+    #[error("No snapshots available")]
+    NoSnapshotsAvailable,
+
     #[error("Ambiguous snapshot ID: {0}. Multiple matches found.")]
     AmbiguousSnapshotId(String),
 

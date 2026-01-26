@@ -34,9 +34,9 @@ pub fn cmd_diff(
         None => {
             let snapshots = snapshot_store.list()?;
             if snapshots.is_empty() {
-                return Err(MoteError::ConfigRead("No snapshots found".to_string()));
+                return Err(MoteError::NoSnapshotsAvailable);
             }
-            snapshots.first().unwrap().id.clone()
+            snapshots[0].id.clone()
         }
     };
 
