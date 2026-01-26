@@ -151,6 +151,24 @@ fn validate_context_name(name: &str) -> Result<()> {
         ));
     }
 
+    if let Some(first_char) = name.chars().next() {
+        if !first_char.is_ascii_alphabetic() && first_char != '_' {
+            return Err(crate::error::MoteError::InvalidName(format!(
+                "Invalid context name '{}': must start with ASCII letter or underscore",
+                name
+            )));
+        }
+    }
+
+    for c in name.chars() {
+        if c.is_control() || (c as u32) < 0x20 || c == '\u{007F}' {
+            return Err(crate::error::MoteError::InvalidName(format!(
+                "Invalid context name '{}': cannot contain control characters",
+                name
+            )));
+        }
+    }
+
     if name.contains("..") || name.contains('/') || name.contains('\\') {
         return Err(crate::error::MoteError::InvalidName(format!(
             "Invalid context name '{}': cannot contain path separators or '..'",

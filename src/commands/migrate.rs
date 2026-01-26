@@ -133,17 +133,18 @@ fn copy_dir_all_impl(src: &Path, dst: &Path) -> std::io::Result<()> {
         let entry = entry?;
         let src_path = entry.path();
         let dst_path = dst.join(entry.file_name());
-        let metadata = entry.metadata()?;
 
-        if metadata.is_symlink() {
+        let file_type = entry.file_type()?;
+
+        if file_type.is_symlink() {
             eprintln!("Warning: Skipping symbolic link: {:?}", src_path);
             continue;
         }
 
-        if metadata.is_dir() {
+        if file_type.is_dir() {
             std::fs::create_dir_all(&dst_path)?;
             copy_dir_all_impl(&src_path, &dst_path)?;
-        } else if metadata.is_file() {
+        } else if file_type.is_file() {
             std::fs::copy(&src_path, &dst_path)?;
         }
     }

@@ -280,7 +280,19 @@ fn generate_unified_diff_with_content(
     let content1 = if hash1.is_empty() {
         Vec::new()
     } else {
-        object_store.retrieve(hash1)?
+        match object_store.retrieve(hash1) {
+            Ok(c) => c,
+            Err(MoteError::ObjectNotFound(hash)) => {
+                eprintln!(
+                    "{}: Object not found for {}: {}",
+                    "warning".yellow(),
+                    path,
+                    hash
+                );
+                Vec::new()
+            }
+            Err(e) => return Err(e),
+        }
     };
 
     let text1 = String::from_utf8_lossy(&content1);
