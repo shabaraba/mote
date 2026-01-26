@@ -10,7 +10,7 @@
 |---|---|---|
 | UC1: 新規プロジェクトでの初回セットアップ | ✅ PASS | プロジェクト自動作成機能が正常動作 |
 | UC2: 複数コンテキストの管理 | ✅ PASS | コンテキスト間の独立性を確認 |
-| UC3: カスタムストレージディレクトリ | ✅ PASS | --storage-dirオプションが正常動作 |
+| UC3: カスタムコンテキストディレクトリ | ✅ PASS | --context-dirオプションが正常動作 |
 | UC4: プロジェクト自動検出 | ✅ PASS | cwdベースの自動検出が動作 |
 | UC5: 既存プロジェクトからの移行 | ✅ PASS | .moteディレクトリからの移行成功 |
 | UC6: コンテキストの削除と一覧表示 | ✅ PASS | default保護機能を含む |
@@ -134,30 +134,45 @@ snapshot d4863df - Staging snapshot (2 files)
 
 ---
 
-## UC3: カスタムストレージディレクトリ
+## UC3: カスタムコンテキストディレクトリ
 
 ### シナリオ
-デフォルトと異なる場所にストレージを配置したい
+コンテキスト全体をプロジェクト内など任意の場所に配置したい（vibing.nvim worktreeユースケース対応）
 
 ### 実行コマンド
 
 ```bash
 cd /tmp/mote-e2e-test/project-beta
-mote --project project-beta context new default --cwd "$PWD" --storage-dir custom_data
+mote --project project-beta context new default --cwd "$PWD" --context-dir "$PWD/.mote"
 ```
+
+### 期待される動作
+- コンテキスト全体（config.toml、ignore、storage/）をカスタムディレクトリに配置
+- ProjectConfigの`contexts`マップにカスタムディレクトリが登録される
+- worktreeごとに独立した`.mote/`ディレクトリを持てる
 
 ### 実行結果
 
 ```
 ✓ Created project 'project-beta'
 ✓ Created context 'default' for project 'project-beta'
+  Context directory: /tmp/mote-e2e-test/project-beta/.mote
 ```
 
-**ストレージディレクトリ:**
+**コンテキストディレクトリ構造:**
 ```
-~/.config/mote/projects/project-beta/contexts/default/custom_data/
-├── objects/
-└── snapshots/
+/tmp/mote-e2e-test/project-beta/.mote/
+├── config.toml
+├── ignore
+└── storage/
+    ├── objects/
+    └── snapshots/
+```
+
+**ProjectConfig (contexts map):**
+```toml
+[contexts]
+default = "/tmp/mote-e2e-test/project-beta/.mote"
 ```
 
 **スナップショット作成:**
@@ -167,14 +182,33 @@ mote --project project-beta snapshot -m "Initial data"
 ```
 
 ```
-✓ Created snapshot 2c5edf8 (1 files)
+✓ Created snapshot c5bcfa3 (1 files)
   Message: Initial data
 ```
 
 ### 検証項目
-- ✅ カスタムストレージディレクトリの指定
+- ✅ カスタムコンテキストディレクトリの指定
+- ✅ プロジェクト内へのコンテキスト配置
 - ✅ カスタムディレクトリ内でのスナップショット作成
-- ✅ オブジェクトとスナップショットディレクトリの作成
+- ✅ ProjectConfigへの登録
+
+### vibing.nvim worktree使用例
+
+```bash
+# メインリポジトリ
+cd ~/project
+mote --project my-app context new main --context-dir ~/project/.mote
+
+# worktree-1
+cd ~/worktrees/feature-a
+mote --project my-app context new feature-a --context-dir ~/worktrees/feature-a/.mote
+
+# worktree-2
+cd ~/worktrees/feature-b
+mote --project my-app context new feature-b --context-dir ~/worktrees/feature-b/.mote
+```
+
+各worktreeに独立した`.mote/`ディレクトリが作成され、完全に独立したスナップショット管理が可能
 
 ---
 
@@ -375,6 +409,24 @@ error: Failed to read config: Cannot delete default context
 - コマンド数削減
 - ユーザー体験のシンプル化
 - ドキュメント更新
+
+### 3. --context-dirオプションの追加 ✅
+
+**問題**: vibing.nvim worktreeユースケースで、各worktreeに独立した`.mote/`ディレクトリを配置できない
+
+**解決策**:
+- `--storage-dir`を廃止し、`--context-dir`に置き換え
+- コンテキスト全体（config.toml、ignore、storage/）を任意の場所に配置可能
+- ProjectConfigに`contexts: HashMap<String, PathBuf>`を追加してカスタムディレクトリを追跡
+
+**変更ファイル**:
+- `src/cli.rs`: --storage-dir → --context-dir
+- `src/config/context.rs`: storage_dir → context_dir、メソッド簡略化
+- `src/config/project.rs`: contextsマップ追加、get_context_dir()メソッド
+- `src/config/resolver.rs`: カスタムcontext_dir解決ロジック
+- `src/main_new_commands.rs`: context_dir登録・削除ロジック
+
+**BREAKING CHANGE**: `--storage-dir`オプションは削除されました
 
 ---
 
