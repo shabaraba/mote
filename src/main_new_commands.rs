@@ -8,68 +8,6 @@ use crate::error::Result;
 use crate::ignore::create_ignore_file;
 use crate::cli::{ContextCommands, IgnoreCommands};
 
-/// Initialize a new project with context structure
-pub fn cmd_init_project(
-    config_resolver: &ConfigResolver,
-    project_name: &str,
-    cwd: Option<PathBuf>,
-    context: Option<String>,
-    max_snapshots: Option<u32>,
-    max_age_days: Option<u32>,
-    storage_dir: Option<PathBuf>,
-) -> Result<()> {
-    let config_dir = config_resolver.config_dir();
-    let project_path = cwd.unwrap_or_else(|| std::env::current_dir().expect("Failed to get current directory"));
-    let context_name = context.unwrap_or_else(|| "default".to_string());
-
-    // Create project config
-    let mut project_config = ProjectConfig {
-        path: project_path.canonicalize().unwrap_or(project_path.clone()),
-        config: Config::default(),
-    };
-
-    // Override snapshot settings if provided
-    if let Some(max_snap) = max_snapshots {
-        project_config.config.snapshot.max_snapshots = max_snap;
-    }
-    if let Some(max_age) = max_age_days {
-        project_config.config.snapshot.max_age_days = max_age;
-    }
-
-    project_config.save(config_dir, project_name)?;
-
-    // Create default context
-    let context_config = ContextConfig {
-        cwd: Some(project_path.clone()),
-        storage_dir: storage_dir.map(|p| p.to_string_lossy().to_string()),
-        config: Config::default(),
-    };
-
-    let project_dir = config_dir.join("projects").join(project_name);
-    context_config.save(&project_dir, &context_name)?;
-
-    // Create ignore file
-    let ignore_path = context_config.ignore_path(&project_dir, &context_name);
-    create_ignore_file(&ignore_path)?;
-
-    println!(
-        "{} Initialized project '{}' with context '{}'",
-        "✓".green().bold(),
-        project_name,
-        context_name
-    );
-    println!(
-        "  Project path: {}",
-        project_path.display().to_string().cyan()
-    );
-    println!(
-        "  Config dir: {}",
-        config_dir.join("projects").join(project_name).display().to_string().cyan()
-    );
-
-    Ok(())
-}
-
 /// Manage contexts
 pub fn cmd_context(config_resolver: &ConfigResolver, command: ContextCommands) -> Result<()> {
     let config_dir = config_resolver.config_dir();

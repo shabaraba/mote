@@ -35,34 +35,8 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Initialize mote in the current directory (legacy, use init-project for new structure)
+    /// Initialize mote in the current directory
     Init,
-
-    /// Initialize a new project with context structure
-    InitProject {
-        /// Project name
-        project_name: String,
-
-        /// Project root path (defaults to current directory)
-        #[arg(long)]
-        cwd: Option<PathBuf>,
-
-        /// Initial context name (defaults to "default")
-        #[arg(long)]
-        context: Option<String>,
-
-        /// Maximum snapshots to keep
-        #[arg(long)]
-        max_snapshots: Option<u32>,
-
-        /// Maximum age in days
-        #[arg(long)]
-        max_age_days: Option<u32>,
-
-        /// Storage directory (relative to context or absolute)
-        #[arg(long)]
-        storage_dir: Option<PathBuf>,
-    },
 
     /// Create a new snapshot
     Snapshot {

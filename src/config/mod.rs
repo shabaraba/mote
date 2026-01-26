@@ -56,16 +56,16 @@
 //! ### Basic Usage
 //!
 //! ```bash
-//! # Initialize a new project with default context
-//! mote init-project my-project
+//! # Create a new context (this also creates the project if it doesn't exist)
+//! mote context new default
 //!
 //! # Create additional contexts for different workflows
-//! mote -p my-project context new feature-branch
-//! mote -p my-project context new experiment
+//! mote context new feature-branch
+//! mote context new experiment
 //!
 //! # Use a specific context
-//! mote -p my-project -c feature-branch snapshot
-//! mote -p my-project -c experiment snapshot
+//! mote -c feature-branch snapshot
+//! mote -c experiment snapshot
 //! ```
 //!
 //! ### Auto-Detection

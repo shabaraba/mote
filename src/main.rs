@@ -6,7 +6,7 @@ mod main_new_commands;
 mod path_resolver;
 mod storage;
 
-use main_new_commands::{cmd_context, cmd_ignore, cmd_init_project, cmd_migrate};
+use main_new_commands::{cmd_context, cmd_ignore, cmd_migrate};
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -100,22 +100,6 @@ fn run() -> Result<()> {
 
     match cli.command {
         Commands::Init => cmd_init(&ctx),
-        Commands::InitProject {
-            project_name,
-            cwd,
-            context,
-            max_snapshots,
-            max_age_days,
-            storage_dir,
-        } => cmd_init_project(
-            &config_resolver,
-            &project_name,
-            cwd,
-            context,
-            max_snapshots,
-            max_age_days,
-            storage_dir,
-        ),
         Commands::Snapshot {
             message,
             trigger,
