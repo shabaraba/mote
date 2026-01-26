@@ -17,6 +17,18 @@ pub struct Cli {
     #[arg(long)]
     pub storage_dir: Option<PathBuf>,
 
+    /// Custom config directory
+    #[arg(short = 'd', long)]
+    pub config_dir: Option<PathBuf>,
+
+    /// Project name
+    #[arg(short = 'p', long)]
+    pub project: Option<String>,
+
+    /// Context name
+    #[arg(short = 'c', long)]
+    pub context: Option<String>,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -103,4 +115,71 @@ pub enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
+
+    /// Manage contexts
+    Context {
+        #[command(subcommand)]
+        command: ContextCommands,
+    },
+
+    /// Manage ignore patterns
+    Ignore {
+        #[command(subcommand)]
+        command: IgnoreCommands,
+    },
+
+    /// Migrate existing .mote directory to new structure
+    Migrate {
+        /// Show what would be migrated without actually migrating
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ContextCommands {
+    /// List all contexts
+    List,
+
+    /// Create a new context
+    New {
+        /// Context name
+        name: String,
+
+        /// Working directory for this context
+        #[arg(long)]
+        cwd: Option<PathBuf>,
+
+        /// Context directory (where config, ignore, and storage are stored)
+        /// If not specified, uses default: ~/.config/mote/projects/<project>/contexts/<name>
+        #[arg(long)]
+        context_dir: Option<PathBuf>,
+    },
+
+    /// Delete a context
+    Delete {
+        /// Context name
+        name: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum IgnoreCommands {
+    /// List ignore patterns
+    List,
+
+    /// Add ignore pattern
+    Add {
+        /// Pattern to add
+        pattern: String,
+    },
+
+    /// Remove ignore pattern
+    Remove {
+        /// Pattern to remove
+        pattern: String,
+    },
+
+    /// Edit ignore file in editor
+    Edit,
 }
