@@ -14,6 +14,8 @@ pub struct ResolveOptions {
     pub context: Option<String>,
     /// Current project root directory for auto-detection
     pub project_root: PathBuf,
+    /// Allow missing project (for commands like context new that can create the project)
+    pub allow_missing_project: bool,
 }
 
 /// Resolves configuration from the 3-layer hierarchy
@@ -79,8 +81,11 @@ impl ConfigResolver {
 
         // Resolve project
         let (project_name, project_config) = if let Some(ref name) = opts.project {
-            let config = ProjectConfig::load(&config_dir, name)?;
-            (Some(name.clone()), Some(config))
+            match ProjectConfig::load(&config_dir, name) {
+                Ok(config) => (Some(name.clone()), Some(config)),
+                Err(e) if opts.allow_missing_project => (Some(name.clone()), None),
+                Err(e) => return Err(e),
+            }
         } else {
             // Try to auto-detect from project_root
             if let Some(name) = ProjectConfig::find_by_path(&config_dir, &opts.project_root)? {

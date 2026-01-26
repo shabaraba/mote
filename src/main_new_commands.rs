@@ -36,6 +36,22 @@ pub fn cmd_context(config_resolver: &ConfigResolver, command: ContextCommands) -
             }
         }
         ContextCommands::New { name, cwd, storage_dir } => {
+            // If project doesn't exist, create it automatically
+            if !project_dir.exists() {
+                let project_cwd = cwd.clone().unwrap_or_else(|| std::env::current_dir().expect("Failed to get current directory"));
+                let project_config = ProjectConfig {
+                    path: project_cwd.canonicalize().unwrap_or(project_cwd),
+                    config: Config::default(),
+                };
+                project_config.save(config_dir, project_name)?;
+
+                println!(
+                    "{} Created project '{}'",
+                    "✓".green().bold(),
+                    project_name
+                );
+            }
+
             let context_config = ContextConfig {
                 cwd,
                 storage_dir: storage_dir.map(|p| p.to_string_lossy().to_string()),

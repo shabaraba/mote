@@ -304,6 +304,7 @@ mod config_merge_tests {
             project: None,
             context: None,
             project_root: PathBuf::from("/tmp/test"),
+            allow_missing_project: false,
         };
 
         // This will use default global config
@@ -323,6 +324,7 @@ mod config_merge_tests {
             project: Some("test-project".to_string()),
             context: Some("test-context".to_string()),
             project_root: PathBuf::from("/tmp/project"),
+            allow_missing_project: false,
         };
 
         assert_eq!(opts.config_dir, Some(PathBuf::from("/custom/config")));

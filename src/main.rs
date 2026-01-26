@@ -53,12 +53,21 @@ fn run() -> Result<()> {
         .clone()
         .unwrap_or_else(|| std::env::current_dir().expect("Failed to get current directory"));
 
+    // Check if this is a context new command (allow missing project for auto-creation)
+    let allow_missing_project = matches!(
+        &cli.command,
+        Commands::Context {
+            command: cli::ContextCommands::New { .. }
+        }
+    );
+
     // Resolve configuration using ConfigResolver
     let resolve_opts = ResolveOptions {
         config_dir: cli.config_dir.clone(),
         project: cli.project.clone(),
         context: cli.context.clone(),
         project_root: project_root.clone(),
+        allow_missing_project,
     };
 
     let config_resolver = ConfigResolver::load(&resolve_opts)?;
