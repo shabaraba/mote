@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/shabaraba/mote/compare/v0.1.2...v0.2.0) (2026-01-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* --storage-dir option removed, use --context-dir instead
+
+### Features
+
+* add configurable ignore file path for mote init ([#13](https://github.com/shabaraba/mote/issues/13)) ([ab6ec82](https://github.com/shabaraba/mote/commit/ab6ec8268009266f49b5ebb950cdb5ea21c7693b))
+* implement 3-layer project/context management system ([#15](https://github.com/shabaraba/mote/issues/15)) ([00501e3](https://github.com/shabaraba/mote/commit/00501e3d0fb4ffe3baea4cd66e03db6b2190b39b))
+
 ## [0.1.2](https://github.com/shabaraba/mote/compare/v0.1.1...v0.1.2) (2026-01-20)
 
 
