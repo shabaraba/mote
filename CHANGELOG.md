@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.1](https://github.com/shabaraba/mote/compare/v0.2.0...v0.2.1) (2026-01-28)
+
+
+### Code Refactoring
+
+* redesign CLI with unified command structure ([#21](https://github.com/shabaraba/mote/issues/21)) ([ad5d5ec](https://github.com/shabaraba/mote/commit/ad5d5ecc30c8bab75fc852ac590f4ffca4db875d))
+
+
+### Documentation
+
+* add comprehensive project/context management documentation ([#17](https://github.com/shabaraba/mote/issues/17)) ([59a2204](https://github.com/shabaraba/mote/commit/59a220400757778df5615183031a586c4e5c6290)), closes [#16](https://github.com/shabaraba/mote/issues/16)
+
 ## [0.2.0](https://github.com/shabaraba/mote/compare/v0.1.2...v0.2.0) (2026-01-26)
 
 
