@@ -106,6 +106,17 @@ impl ProjectConfig {
         Ok(names)
     }
 
+    /// List all context names registered in this project's contexts map
+    pub fn list_contexts(&self) -> Vec<String> {
+        if let Some(ref contexts) = self.contexts {
+            let mut names: Vec<_> = contexts.keys().cloned().collect();
+            names.sort();
+            names
+        } else {
+            Vec::new()
+        }
+    }
+
     /// Find project by path
     pub fn find_by_path(config_dir: &Path, project_path: &Path) -> Result<Option<String>> {
         let canonical_path = project_path
@@ -171,9 +182,9 @@ impl ProjectConfig {
             }
         }
 
-        // Character validation (alphanumeric, hyphen, underscore only)
+        // Character validation (alphanumeric, hyphen, underscore, dot)
         for (i, c) in name.chars().enumerate() {
-            if !c.is_ascii_alphanumeric() && c != '-' && c != '_' {
+            if !c.is_ascii_alphanumeric() && c != '-' && c != '_' && c != '.' {
                 return Err(MoteError::InvalidName(format!(
                     "Invalid character '{}' at position {}",
                     c, i

@@ -127,9 +127,6 @@ mod validation_tests {
         let result = config.save(&PathBuf::from("/tmp/test"), "pro@ject");
         assert!(result.is_err());
 
-        let result = config.save(&PathBuf::from("/tmp/test"), "pro.ject");
-        assert!(result.is_err());
-
         let result = config.save(&PathBuf::from("/tmp/test"), "pro$ject");
         assert!(result.is_err());
     }
@@ -139,7 +136,7 @@ mod validation_tests {
         let config = create_test_project_config();
 
         // These should pass validation (will fail on filesystem)
-        let names = vec!["pro-ject", "pro_ject", "project123", "Project", "_valid", "a"];
+        let names = vec!["pro-ject", "pro_ject", "pro.ject", "project123", "Project", "_valid", "a"];
 
         for name in names {
             let result = config.save(&PathBuf::from("/tmp/nonexistent"), name);
@@ -242,6 +239,7 @@ mod config_merge_tests {
             config_dir: None,
             project: None,
             context: None,
+            context_dir: None,
             project_root: PathBuf::from("/tmp/test"),
             allow_missing_project: false,
         };
@@ -262,6 +260,7 @@ mod config_merge_tests {
             config_dir: Some(PathBuf::from("/custom/config")),
             project: Some("test-project".to_string()),
             context: Some("test-context".to_string()),
+            context_dir: None,
             project_root: PathBuf::from("/tmp/project"),
             allow_missing_project: false,
         };

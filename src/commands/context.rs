@@ -1,11 +1,16 @@
 use colored::*;
+use std::path::PathBuf;
 
 use crate::cli::ContextCommands;
 use crate::config::{Config, ConfigResolver, ContextConfig, ProjectConfig};
 use crate::error::Result;
 use crate::ignore::create_ignore_file;
 
-pub fn cmd_context(config_resolver: &ConfigResolver, command: ContextCommands) -> Result<()> {
+pub fn cmd_context(
+    config_resolver: &ConfigResolver,
+    command: ContextCommands,
+    context_dir: Option<&PathBuf>,
+) -> Result<()> {
     let config_dir = config_resolver.config_dir();
     let project_name = config_resolver.project_name().ok_or_else(|| {
         crate::error::MoteError::ConfigRead(
@@ -18,7 +23,9 @@ pub fn cmd_context(config_resolver: &ConfigResolver, command: ContextCommands) -
 
     match command {
         ContextCommands::List => {
-            let contexts = ContextConfig::list(&project_dir)?;
+            let project_config = ProjectConfig::load(config_dir, project_name)?;
+            let contexts = project_config.list_contexts();
+
             if contexts.is_empty() {
                 println!("{} No contexts found", "!".yellow().bold());
             } else {
@@ -35,7 +42,7 @@ pub fn cmd_context(config_resolver: &ConfigResolver, command: ContextCommands) -
         ContextCommands::New {
             name,
             cwd,
-            context_dir,
+            no_register,
         } => {
             validate_context_name(&name)?;
 
@@ -67,24 +74,30 @@ pub fn cmd_context(config_resolver: &ConfigResolver, command: ContextCommands) -
                 config
             };
 
-            let actual_context_dir = if let Some(custom_dir) = context_dir.clone() {
-                project_config.register_context(name.clone(), custom_dir.clone());
-                project_config.save(config_dir, project_name)?;
-                custom_dir
+            // Determine the actual context directory
+            let actual_context_dir = if let Some(custom_dir) = context_dir {
+                custom_dir.clone()
             } else {
                 project_dir.join("contexts").join(&name)
             };
 
             let context_config = ContextConfig {
                 cwd,
-                context_dir,
+                context_dir: context_dir.cloned(),
                 config: Config::default(),
             };
 
+            // Save context config first (can fail with ContextAlreadyExists)
             context_config.save(&project_dir, &name)?;
 
             let ignore_path = context_config.ignore_path(&actual_context_dir);
             create_ignore_file(&ignore_path)?;
+
+            // Register context in map only after successful creation
+            if !no_register {
+                project_config.register_context(name.clone(), actual_context_dir.clone());
+                project_config.save(config_dir, project_name)?;
+            }
 
             println!(
                 "{} Created context '{}' for project '{}'",
@@ -96,6 +109,12 @@ pub fn cmd_context(config_resolver: &ConfigResolver, command: ContextCommands) -
                 println!(
                     "  Context directory: {}",
                     actual_context_dir.display().to_string().cyan()
+                );
+            }
+            if no_register {
+                println!(
+                    "  {}",
+                    "Not registered in project config (temporary context)".yellow()
                 );
             }
         }
