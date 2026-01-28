@@ -67,22 +67,23 @@ Download pre-built binaries from [GitHub Releases](https://github.com/shabaraba/
 
 ```bash
 # Initialize mote in your project
-mote init
+mote project init
 
 # Create a snapshot
-mote snapshot -m "Before refactoring"
+mote snap -m "Before refactoring"
+# or simply: mote snap
 
 # View snapshot history
-mote log
+mote snap list
 
 # Show differences with current working directory
-mote diff <snapshot-id>
+mote snap diff <snapshot-id>
 
 # Restore a specific file
-mote restore <snapshot-id> --file src/main.rs
+mote snap restore <snapshot-id> --file src/main.rs
 
 # Restore entire snapshot
-mote restore <snapshot-id> --force
+mote snap restore <snapshot-id> --force
 ```
 
 ## Global Options
@@ -97,36 +98,24 @@ Mote uses a 3-layer configuration system (v0.2.0+):
 2. **Project**: Project-specific settings (`~/.config/mote/projects/<name>/`)
 3. **Context**: Context-specific settings (highest priority)
 
-#### `--project <name>` / `-p <name>`
+#### `-c, --context <SPEC>`
 
-Specify or auto-detect the project. Projects group multiple contexts together:
-
-```bash
-# Auto-detect project from current directory
-mote snapshot -m "work"
-
-# Explicitly specify project
-mote --project my-app snapshot -m "work"
-mote -p my-app log
-```
-
-#### `--context <name>` / `-c <name>`
-
-Use a specific context within a project. Each context has its own:
-- Snapshot history (storage)
-- Ignore patterns
-- Configuration overrides
+Unified context specifier supporting multiple formats:
 
 ```bash
-# Use default context
-mote snapshot -m "main work"
+# Format: [project/]context
 
-# Use feature-specific context
-mote --context feature-x snapshot -m "feature X iteration"
-mote -c feature-x log
+# Auto-detect project, specify context
+mote -c feature-x snap -m "feature work"
 
-# Use experimental context
-mote -c experiment snapshot -m "trying new approach"
+# Explicitly specify both project and context
+mote -c my-app/feature-x snap -m "feature work"
+
+# Just project name (uses default context)
+mote -c my-app snap -m "work"
+
+# No specification (auto-detect project, use default context)
+mote snap -m "work"
 ```
 
 **Typical workflow:**
@@ -134,13 +123,13 @@ mote -c experiment snapshot -m "trying new approach"
 # Create a new context for a feature
 mote context new feature-auth
 
-# Switch to that context for all operations
-mote -c feature-auth snapshot -m "baseline"
-mote -c feature-auth log
-mote -c feature-auth diff
+# Use that context for all operations
+mote -c feature-auth snap -m "baseline"
+mote -c feature-auth snap list
+mote -c feature-auth snap diff
 
 # Return to default context
-mote snapshot -m "back to main work"
+mote snap -m "back to main work"
 ```
 
 **Use cases:**
@@ -149,126 +138,190 @@ mote snapshot -m "back to main work"
 - **Team workflows**: Different contexts for personal vs. shared work
 - **Long-term vs. temporary**: Keep important snapshots separate from debugging noise
 
-### `--storage-dir <path>` (Legacy)
+#### `-d, --context-dir <PATH>`
 
-Use a custom storage directory instead of managed contexts. This is the legacy approach from v0.1.x:
+Standalone mode - use a specific directory without project management:
 
 ```bash
-# Feature-specific history (legacy style)
-mote --storage-dir .mote-feature-x snapshot -m "feature X iteration"
-mote --storage-dir .mote-feature-x log
+# Quick temporary snapshots
+mote -d /tmp/my-snapshot snap
+mote -d /tmp/my-snapshot snap list
+
+# Local project snapshots
+mote -d ./.mote snap -m "local work"
 ```
 
-**Note**: For new projects, prefer using `--project` and `--context` for better organization.
+**Note**: Cannot be used with `-c/--context` or `--config-dir`.
 
 ### Other Global Options
 
 - `--project-root <path>`: Specify project root directory (default: current directory)
-- `--ignore-file <path>`: Use custom ignore file (overrides context/project ignore)
-- `--config-dir <path>` / `-d <path>`: Use custom config directory (default: `~/.config/mote`)
+- `--config-dir <path>`: Use custom config directory (default: `~/.config/mote`)
 
 ## Commands
 
-### `mote init`
+### Snapshot Operations
 
-Initialize mote in the current directory. Creates `.mote/` directory and `.moteignore` file.
-
-```bash
-mote init
-```
-
-### `mote snapshot`
+#### `mote snap [create]`
 
 Create a new snapshot of tracked files.
 
 ```bash
-mote snapshot                           # Create snapshot
-mote snapshot -m "Description"          # With message
-mote snapshot --trigger "claude-hook"   # With trigger source
-mote snapshot --auto                    # Auto mode (silent, skip if no changes)
+mote snap                           # Create snapshot (create is default)
+mote snap create -m "Description"   # With message
+mote snap -m "Description"          # Shorthand
+mote snap --trigger "claude-hook"   # With trigger source
+mote snap --auto                    # Auto mode (silent, skip if no changes)
 ```
 
-### `mote setup-shell`
-
-Print shell integration script for git/jj auto-snapshot.
-
-```bash
-mote setup-shell zsh    # For zsh/bash
-mote setup-shell fish   # For fish shell
-
-# Add to your shell config:
-mote setup-shell zsh >> ~/.zshrc
-```
-
-### `mote log`
+#### `mote snap list`
 
 Show snapshot history.
 
 ```bash
-mote log                # Show recent snapshots
-mote log --limit 50     # Show more snapshots
-mote log --oneline      # Compact format
+mote snap list              # Show recent snapshots
+mote snap list --limit 50   # Show more snapshots
+mote snap list --oneline    # Compact format
 ```
 
-### `mote show`
+#### `mote snap show`
 
 Show details of a specific snapshot.
 
 ```bash
-mote show abc123d       # Use short ID
+mote snap show abc123d      # Use short ID
 ```
 
-### `mote diff`
+#### `mote snap diff`
 
 Show differences between snapshots or working directory.
 
 ```bash
-mote diff abc123d              # Compare with working directory
-mote diff abc123d def456a      # Compare two snapshots
-mote diff abc123d --content    # Show file content diff
+mote snap diff abc123d              # Compare with working directory
+mote snap diff abc123d def456a      # Compare two snapshots
+mote snap diff abc123d --name-only  # Show only changed files
+mote snap diff abc123d -o diff.patch  # Save to file
 ```
 
-### `mote restore`
+#### `mote snap restore`
 
 Restore files from a snapshot.
 
 ```bash
-mote restore abc123d --file src/main.rs   # Restore single file
-mote restore abc123d                       # Restore all (creates backup first)
-mote restore abc123d --force               # Force restore without backup
-mote restore abc123d --dry-run             # Preview what would be restored
+mote snap restore abc123d --file src/main.rs   # Restore single file
+mote snap restore abc123d                       # Restore all (creates backup first)
+mote snap restore abc123d --force               # Force restore without backup
+mote snap restore abc123d --dry-run             # Preview what would be restored
 ```
 
-### `mote context`
+### Project Management
 
-Manage contexts within a project. Each context maintains separate snapshot history and configuration.
+#### `mote project list`
+
+List all registered projects.
 
 ```bash
-# List all contexts for current/specified project
-mote context list
-mote -p my-app context list
+mote project list
+```
 
+#### `mote project init`
+
+Initialize a new project.
+
+```bash
+mote project init              # Use current directory name as project name
+mote project init my-project   # Specify project name
+```
+
+### Context Management
+
+#### `mote context list`
+
+List all contexts for the current project.
+
+```bash
+mote context list              # Auto-detect project
+mote -c my-app context list    # Specify project
+```
+
+#### `mote context new`
+
+Create a new context.
+
+```bash
 # Create a new context
 mote context new feature-auth
-mote -p my-app context new feature-auth
 
-# Create context with custom directory
-mote context new feature-auth --context-dir ~/mote-contexts/feature-auth
-
-# Create context with custom working directory
+# With custom working directory
 mote context new feature-auth --cwd /path/to/project
 
-# Delete a context (cannot delete 'default')
+# Don't register in project config (temporary)
+mote context new temp --no-register
+```
+
+#### `mote context delete`
+
+Delete a context.
+
+```bash
 mote context delete feature-auth
-mote -p my-app context delete feature-auth
+mote -c my-app context delete feature-auth
 ```
 
 **Context naming rules:**
 - Must start with ASCII letter or underscore
-- Can contain ASCII letters, digits, hyphens, underscores, and dots
+- Can contain ASCII letters, digits, hyphens, and underscores
 - 1-255 characters
 - Cannot use Windows reserved names (CON, PRN, AUX, etc.)
 - Cannot contain path separators or control characters
+
+### Other Commands
+
+#### `mote setup`
+
+Print shell integration script for git/jj auto-snapshot.
+
+```bash
+mote setup zsh     # For zsh/bash
+mote setup fish    # For fish shell
+
+# Add to your shell config:
+mote setup zsh >> ~/.zshrc
+```
+
+#### `mote ignore`
+
+Manage ignore patterns.
+
+```bash
+mote ignore list              # List current patterns
+mote ignore add "*.log"       # Add pattern
+mote ignore remove "*.log"    # Remove pattern
+mote ignore edit              # Edit in $EDITOR
+```
+
+#### `mote migrate`
+
+Migrate existing `.mote` directory to new structure.
+
+```bash
+mote migrate              # Perform migration
+mote migrate --dry-run    # Preview changes
+```
+
+### Backward Compatibility
+
+The following legacy commands still work (hidden in help):
+
+```bash
+mote log          → mote snap list
+mote show <id>    → mote snap show <id>
+mote diff         → mote snap diff
+mote restore      → mote snap restore
+mote snapshot     → mote snap create
+mote init         → mote project init
+mote setup-shell  → mote setup
+```
 
 ## Configuration
 
@@ -377,44 +430,44 @@ dist/
 ```bash
 # 1. プロジェクトの初期化（初回のみ）
 cd /path/to/my-app
-mote init
+mote project init
 
 # 2. 認証機能用のコンテキスト作成
 mote context new feature-auth
 # ✓ Created context 'feature-auth' for project 'my-app'
 
 # 3. 認証機能の開発開始（ベースライン作成）
-mote -c feature-auth snapshot -m "Start authentication feature"
+mote -c feature-auth snap -m "Start authentication feature"
 # Snapshot created: abc123d
 
 # 4. 実装作業
 # ... コードを編集 ...
 
 # 5. 途中経過を記録
-mote -c feature-auth snapshot -m "Add login form"
+mote -c feature-auth snap -m "Add login form"
 # Snapshot created: def456a
 
 # 6. さらに実装
 # ... コードを編集 ...
 
 # 7. 途中の差分確認
-mote -c feature-auth diff def456a
+mote -c feature-auth snap diff def456a
 # Shows: 現在の作業ディレクトリとスナップショットdef456aの差分
 
 # 8. 実装完了時のスナップショット
-mote -c feature-auth snapshot -m "Complete authentication feature"
+mote -c feature-auth snap -m "Complete authentication feature"
 # Snapshot created: ghi789b
 
 # 9. feature-authコンテキストの全履歴確認
-mote -c feature-auth log
+mote -c feature-auth snap list
 # Shows: feature-auth専用のスナップショット履歴
 
 # 10. 別の機能に切り替え（デフォルトコンテキストに戻る）
-mote snapshot -m "Back to main development"
+mote snap -m "Back to main development"
 # Snapshot created: jkl012c (別のコンテキスト)
 
 # 11. いつでもfeature-authの履歴に戻れる
-mote -c feature-auth log
+mote -c feature-auth snap list
 ```
 
 **メリット**:
@@ -432,18 +485,18 @@ mote context new experiment-refactor
 # ✓ Created context 'experiment-refactor'
 
 # 2. 実験開始前のベースライン
-mote -c experiment-refactor snapshot -m "Before refactoring experiment"
+mote -c experiment-refactor snap -m "Before refactoring experiment"
 # Snapshot created: exp001a
 
 # 3. 大胆なリファクタリング実施
 # ... 大幅なコード変更 ...
 
 # 4. 途中経過を記録
-mote -c experiment-refactor snapshot -m "Try new architecture pattern"
+mote -c experiment-refactor snap -m "Try new architecture pattern"
 # Snapshot created: exp002b
 
 # 5. 結果が良くない場合は元に戻す
-mote -c experiment-refactor restore exp001a
+mote -c experiment-refactor snap restore exp001a
 # Restored from snapshot exp001a
 
 # 6. 実験が失敗したらコンテキストごと削除
@@ -452,7 +505,7 @@ mote context delete experiment-refactor
 # → 実験の痕跡が完全に消える（メインの履歴は無傷）
 
 # 7. 実験が成功した場合は、そのまま継続開発
-mote -c experiment-refactor snapshot -m "New architecture works!"
+mote -c experiment-refactor snap -m "New architecture works!"
 # → このコンテキストを本番に昇格させることも可能
 ```
 
@@ -471,41 +524,41 @@ mote context new debug-issue-42
 # ✓ Created context 'debug-issue-42'
 
 # 2. バグ発生時の状態を記録
-mote -c debug-issue-42 snapshot -m "Initial bug state"
+mote -c debug-issue-42 snap -m "Initial bug state"
 # Snapshot created: bug001a
 
 # 3. デバッグ用のログ追加
 # ... console.log, デバッガ設定など ...
-mote -c debug-issue-42 snapshot -m "Add debug logging"
+mote -c debug-issue-42 snap -m "Add debug logging"
 # Snapshot created: bug002b
 
 # 4. 仮説1を試す
 # ... コード変更 ...
-mote -c debug-issue-42 snapshot -m "Hypothesis 1: async timing issue"
+mote -c debug-issue-42 snap -m "Hypothesis 1: async timing issue"
 # Snapshot created: bug003c
 
 # 5. 仮説1が外れたので仮説2を試す
-mote -c debug-issue-42 restore bug002b  # ログ追加直後に戻る
-mote -c debug-issue-42 snapshot -m "Hypothesis 2: race condition"
+mote -c debug-issue-42 snap restore bug002b  # ログ追加直後に戻る
+mote -c debug-issue-42 snap -m "Hypothesis 2: race condition"
 # Snapshot created: bug004d
 
 # 6. 原因特定！修正を適用
 # ... 修正コード ...
-mote -c debug-issue-42 snapshot -m "Fix identified: mutex needed"
+mote -c debug-issue-42 snap -m "Fix identified: mutex needed"
 # Snapshot created: bug005e
 
 # 7. バグ修正前後の差分を確認
-mote -c debug-issue-42 diff bug001a bug005e --content
+mote -c debug-issue-42 snap diff bug001a bug005e
 # Shows: 最初の状態と修正後の完全な差分
 
 # 8. デバッグログをクリーンアップ（最初の状態に戻す）
-mote -c debug-issue-42 restore bug001a --file src/problematic-module.js
+mote -c debug-issue-42 snap restore bug001a --file src/problematic-module.js
 # → デバッグログだけ削除、修正は保持
 
 # 9. デバッグ完了後、コンテキストを削除または保存
 mote context delete debug-issue-42  # 削除
 # または
-mote -c debug-issue-42 snapshot -m "Final clean state"  # 記録として保存
+mote -c debug-issue-42 snap -m "Final clean state"  # 記録として保存
 ```
 
 **メリット**:
@@ -519,7 +572,7 @@ mote -c debug-issue-42 snapshot -m "Final clean state"  # 記録として保存
 
 ```bash
 # 1. 個人作業用コンテキスト（デフォルト）
-mote snapshot -m "Personal exploration"
+mote snap -m "Personal exploration"
 # Snapshot created: per001a (default context)
 
 # 2. チーム共有用コンテキスト作成
@@ -527,23 +580,23 @@ mote context new team-shared --cwd /path/to/team/workspace
 # ✓ Created context 'team-shared'
 
 # 3. チーム作業時のみ共有コンテキストを使用
-mote -c team-shared snapshot -m "Team sprint 1 start"
+mote -c team-shared snap -m "Team sprint 1 start"
 # Snapshot created: team001a
 
 # 4. ペアプログラミング中の変更を記録
-mote -c team-shared snapshot -m "Pair programming session"
+mote -c team-shared snap -m "Pair programming session"
 # Snapshot created: team002b
 
 # 5. 個人作業に戻る（コンテキストを切り替えるだけ）
-mote snapshot -m "Personal refactoring ideas"
+mote snap -m "Personal refactoring ideas"
 # Snapshot created: per002b (別の履歴)
 
 # 6. チーム作業の履歴確認
-mote -c team-shared log
+mote -c team-shared snap list
 # Shows: チーム作業のみの履歴
 
 # 7. 個人作業の履歴確認
-mote log
+mote snap list
 # Shows: 個人作業のみの履歴
 ```
 
@@ -566,11 +619,11 @@ mote context new temp-debug
 # ✓ Created context 'temp-debug'
 
 # 3. マイルストーンを記録
-mote -c milestones snapshot -m "v1.0.0 release candidate"
+mote -c milestones snap -m "v1.0.0 release candidate"
 # Snapshot created: mile001a
 
 # 4. 日々のデバッグはtemp-debugで
-mote -c temp-debug snapshot -m "Debug session 2024-01-28"
+mote -c temp-debug snap -m "Debug session 2024-01-28"
 # Snapshot created: temp001a
 
 # 5. 定期的にtemp-debugをクリーンアップ
@@ -578,7 +631,7 @@ mote context delete temp-debug
 mote context new temp-debug  # 新規作成で履歴リセット
 
 # 6. マイルストーンは長期保存
-mote -c milestones log
+mote -c milestones snap list
 # Shows: 重要な節目のみの履歴（見やすい）
 ```
 
@@ -603,20 +656,20 @@ mote -c milestones log
 
 **🧪 Experimental Development**
 ```bash
-mote snapshot -m "baseline"
+mote snap -m "baseline"
 # Try approach A
-mote snapshot -m "approach-a"
+mote snap -m "approach-a"
 # Try approach B
-mote snapshot -m "approach-b"
-mote diff approach-a approach-b  # Compare without any commits
+mote snap -m "approach-b"
+mote snap diff approach-a approach-b  # Compare without any commits
 ```
 
 **🐛 Debugging Sessions**
 ```bash
-mote snapshot -m "before-debug"
+mote snap -m "before-debug"
 # Add logging, modify code, test...
-mote snapshot -m "after-debug"
-mote diff before-debug after-debug  # See exactly what changed
+mote snap -m "after-debug"
+mote snap diff before-debug after-debug  # See exactly what changed
 ```
 
 **📊 Cross-VCS Analysis**
@@ -625,7 +678,7 @@ git checkout feature-1    # → auto snapshot
 # work on feature-1
 git checkout feature-2    # → auto snapshot
 # work on feature-2
-mote diff <feature-1-snapshot> <feature-2-snapshot>  # Compare work across branches
+mote snap diff <feature-1-snapshot> <feature-2-snapshot>  # Compare work across branches
 ```
 
 ## 🔗 Integration
@@ -636,7 +689,7 @@ mote shines when integrated with your VCS workflow. Automatically capture snapsh
 
 **Setup:**
 ```bash
-mote setup-shell zsh >> ~/.zshrc
+mote setup zsh >> ~/.zshrc
 source ~/.zshrc
 ```
 
@@ -649,7 +702,7 @@ source ~/.zshrc
 git checkout feature-branch    # → auto snapshot (state A)
 # ... make changes ...
 git checkout main              # → auto snapshot (state B)
-mote diff <A> <B>              # → diff across git operations
+mote snap diff <A> <B>         # → diff across git operations
 ```
 
 ### Claude Code Hook Integration
@@ -659,7 +712,7 @@ Add to your `~/.claude/settings.json`:
 ```json
 {
   "hooks": {
-    "PostToolUse": "mote snapshot --trigger claude-hook"
+    "PostToolUse": "mote snap --trigger claude-hook"
   }
 }
 ```
@@ -669,7 +722,7 @@ Add to your `~/.claude/settings.json`:
 ```lua
 require('vibing').setup({
   on_ai_edit = function()
-    vim.fn.system('mote snapshot --trigger vibing.nvim')
+    vim.fn.system('mote snap --trigger vibing.nvim')
   end
 })
 ```
