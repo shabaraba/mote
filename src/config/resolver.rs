@@ -12,6 +12,8 @@ pub struct ResolveOptions {
     pub project: Option<String>,
     /// Context name within the project (defaults to "default")
     pub context: Option<String>,
+    /// Custom context directory (overrides default location)
+    pub context_dir: Option<PathBuf>,
     /// Current project root directory for auto-detection
     pub project_root: PathBuf,
     /// Allow missing project (for commands like context new that can create the project)
@@ -104,9 +106,16 @@ impl ConfigResolver {
         {
             let project_dir = config_dir.join("projects").join(proj_name);
 
-            // Get context directory from project config (handles custom context_dir)
-            let context_dir_override = proj_config.contexts.as_ref()
-                .and_then(|contexts| contexts.get(&context_name));
+            // Get context directory: CLI option > project config map
+            let context_dir_override = opts
+                .context_dir
+                .as_ref()
+                .or_else(|| {
+                    proj_config
+                        .contexts
+                        .as_ref()
+                        .and_then(|contexts| contexts.get(&context_name))
+                });
 
             // If context was explicitly specified, propagate errors
             // If using default context, allow it to be missing

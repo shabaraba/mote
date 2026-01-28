@@ -29,17 +29,24 @@ fn run() -> Result<()> {
         .clone()
         .unwrap_or_else(|| std::env::current_dir().expect("Failed to get current directory"));
 
+    // Standalone mode detection: --context-dir without --project/--context
+    let is_standalone_mode = cli.context_dir.is_some()
+        && cli.project.is_none()
+        && cli.context.is_none()
+        && !matches!(&cli.command, Commands::Context { .. });
+
     let allow_missing_project = matches!(
         &cli.command,
         Commands::Context {
             command: cli::ContextCommands::New { .. }
         } | Commands::Migrate { .. }
-    );
+    ) || is_standalone_mode;
 
     let resolve_opts = ResolveOptions {
         config_dir: cli.config_dir.clone(),
         project: cli.project.clone(),
         context: cli.context.clone(),
+        context_dir: cli.context_dir.clone(),
         project_root: project_root.clone(),
         allow_missing_project,
     };
@@ -47,13 +54,38 @@ fn run() -> Result<()> {
     let config_resolver = ConfigResolver::load(&resolve_opts)?;
     let config = config_resolver.resolve();
 
-    let ignore_file_path = cli
-        .ignore_file
-        .clone()
-        .or_else(|| config_resolver.context_ignore_path())
-        .unwrap_or_else(|| {
-            resolve_ignore_file_path(&project_root, None, &config.ignore.ignore_file)
-        });
+    // Auto-initialize context directory if in standalone mode
+    if let Some(ref ctx_dir) = cli.context_dir {
+        if is_standalone_mode {
+            if !ctx_dir.exists() {
+                std::fs::create_dir_all(ctx_dir)?;
+                std::fs::create_dir_all(ctx_dir.join("storage"))?;
+                std::fs::create_dir_all(ctx_dir.join("storage/objects"))?;
+                std::fs::create_dir_all(ctx_dir.join("storage/snapshots"))?;
+
+                // Create default ignore file
+                let ignore_path = ctx_dir.join("ignore");
+                if !ignore_path.exists() {
+                    crate::ignore::create_ignore_file(&ignore_path)?;
+                }
+            }
+        }
+    }
+
+    let ignore_file_path = if is_standalone_mode {
+        // Standalone mode: use context_dir/ignore or explicit --ignore-file
+        cli.ignore_file
+            .clone()
+            .unwrap_or_else(|| cli.context_dir.as_ref().unwrap().join("ignore"))
+    } else {
+        // Normal mode: use context ignore path or project default
+        cli.ignore_file
+            .clone()
+            .or_else(|| config_resolver.context_ignore_path())
+            .unwrap_or_else(|| {
+                resolve_ignore_file_path(&project_root, None, &config.ignore.ignore_file)
+            })
+    };
 
     let ignore_file_path = if ignore_file_path.is_absolute() {
         ignore_file_path
@@ -61,17 +93,19 @@ fn run() -> Result<()> {
         project_root.join(ignore_file_path)
     };
 
-    let resolved_storage_dir = cli
-        .storage_dir
-        .clone()
-        .or_else(|| config_resolver.context_storage_dir())
-        .map(|path| {
+    let resolved_storage_dir = if is_standalone_mode {
+        // Standalone mode: use context_dir/storage
+        Some(cli.context_dir.as_ref().unwrap().join("storage"))
+    } else {
+        // Normal mode: use context storage
+        config_resolver.context_storage_dir().map(|path| {
             if path.is_absolute() {
                 path
             } else {
                 project_root.join(path)
             }
-        });
+        })
+    };
 
     let ctx = CommandContext {
         project_root: &project_root,
@@ -103,7 +137,9 @@ fn run() -> Result<()> {
             force,
             dry_run,
         } => commands::cmd_restore(&ctx, &snapshot_id, file, force, dry_run),
-        Commands::Context { command } => commands::cmd_context(&config_resolver, command),
+        Commands::Context { command } => {
+            commands::cmd_context(&config_resolver, command, cli.context_dir.as_ref())
+        }
         Commands::Ignore { command } => commands::cmd_ignore(&ignore_file_path, command),
         Commands::Migrate { dry_run } => {
             commands::cmd_migrate(&project_root, &config_resolver, dry_run)

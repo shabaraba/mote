@@ -239,6 +239,7 @@ mod config_merge_tests {
             config_dir: None,
             project: None,
             context: None,
+            context_dir: None,
             project_root: PathBuf::from("/tmp/test"),
             allow_missing_project: false,
         };
@@ -259,6 +260,7 @@ mod config_merge_tests {
             config_dir: Some(PathBuf::from("/custom/config")),
             project: Some("test-project".to_string()),
             context: Some("test-context".to_string()),
+            context_dir: None,
             project_root: PathBuf::from("/tmp/project"),
             allow_missing_project: false,
         };

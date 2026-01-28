@@ -1,11 +1,16 @@
 use colored::*;
+use std::path::PathBuf;
 
 use crate::cli::ContextCommands;
 use crate::config::{Config, ConfigResolver, ContextConfig, ProjectConfig};
 use crate::error::Result;
 use crate::ignore::create_ignore_file;
 
-pub fn cmd_context(config_resolver: &ConfigResolver, command: ContextCommands) -> Result<()> {
+pub fn cmd_context(
+    config_resolver: &ConfigResolver,
+    command: ContextCommands,
+    context_dir: Option<&PathBuf>,
+) -> Result<()> {
     let config_dir = config_resolver.config_dir();
     let project_name = config_resolver.project_name().ok_or_else(|| {
         crate::error::MoteError::ConfigRead(
@@ -37,7 +42,6 @@ pub fn cmd_context(config_resolver: &ConfigResolver, command: ContextCommands) -
         ContextCommands::New {
             name,
             cwd,
-            context_dir,
             no_register,
         } => {
             validate_context_name(&name)?;
@@ -71,15 +75,15 @@ pub fn cmd_context(config_resolver: &ConfigResolver, command: ContextCommands) -
             };
 
             // Determine the actual context directory
-            let actual_context_dir = if let Some(custom_dir) = context_dir.clone() {
-                custom_dir
+            let actual_context_dir = if let Some(custom_dir) = context_dir {
+                custom_dir.clone()
             } else {
                 project_dir.join("contexts").join(&name)
             };
 
             let context_config = ContextConfig {
                 cwd,
-                context_dir,
+                context_dir: context_dir.cloned(),
                 config: Config::default(),
             };
 

@@ -6,28 +6,29 @@ use std::path::PathBuf;
 #[command(author, version, about = "A fine-grained snapshot management tool", long_about = None)]
 pub struct Cli {
     /// Custom project root (defaults to current directory)
-    #[arg(long)]
+    #[arg(long, global = true)]
     pub project_root: Option<PathBuf>,
 
     /// Custom ignore file path (overrides config)
-    #[arg(long)]
+    #[arg(long, global = true)]
     pub ignore_file: Option<PathBuf>,
 
-    /// Custom storage directory
-    #[arg(long)]
-    pub storage_dir: Option<PathBuf>,
-
     /// Custom config directory
-    #[arg(short = 'd', long)]
+    #[arg(short = 'd', long, global = true)]
     pub config_dir: Option<PathBuf>,
 
     /// Project name
-    #[arg(short = 'p', long)]
+    #[arg(short = 'p', long, global = true)]
     pub project: Option<String>,
 
     /// Context name
-    #[arg(short = 'c', long)]
+    #[arg(short = 'c', long, global = true)]
     pub context: Option<String>,
+
+    /// Context directory (where config, ignore, and storage are stored)
+    /// If not specified, uses default: ~/.config/mote/projects/<project>/contexts/<name>
+    #[arg(long, global = true)]
+    pub context_dir: Option<PathBuf>,
 
     #[command(subcommand)]
     pub command: Commands,
@@ -149,11 +150,6 @@ pub enum ContextCommands {
         /// Working directory for this context
         #[arg(long)]
         cwd: Option<PathBuf>,
-
-        /// Context directory (where config, ignore, and storage are stored)
-        /// If not specified, uses default: ~/.config/mote/projects/<project>/contexts/<name>
-        #[arg(long)]
-        context_dir: Option<PathBuf>,
 
         /// Do not register this context in project config (for temporary contexts)
         #[arg(long)]
