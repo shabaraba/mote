@@ -127,9 +127,6 @@ mod validation_tests {
         let result = config.save(&PathBuf::from("/tmp/test"), "pro@ject");
         assert!(result.is_err());
 
-        let result = config.save(&PathBuf::from("/tmp/test"), "pro.ject");
-        assert!(result.is_err());
-
         let result = config.save(&PathBuf::from("/tmp/test"), "pro$ject");
         assert!(result.is_err());
     }
@@ -139,7 +136,7 @@ mod validation_tests {
         let config = create_test_project_config();
 
         // These should pass validation (will fail on filesystem)
-        let names = vec!["pro-ject", "pro_ject", "project123", "Project", "_valid", "a"];
+        let names = vec!["pro-ject", "pro_ject", "pro.ject", "project123", "Project", "_valid", "a"];
 
         for name in names {
             let result = config.save(&PathBuf::from("/tmp/nonexistent"), name);

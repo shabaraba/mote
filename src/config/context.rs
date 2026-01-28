@@ -78,27 +78,6 @@ impl ContextConfig {
         Ok(())
     }
 
-    /// List all context names for a project
-    pub fn list(project_dir: &Path) -> Result<Vec<String>> {
-        let contexts_dir = project_dir.join("contexts");
-
-        if !contexts_dir.exists() {
-            return Ok(Vec::new());
-        }
-
-        let mut names = Vec::new();
-
-        for entry in fs::read_dir(contexts_dir)? {
-            let entry = entry?;
-            if entry.file_type()?.is_dir() {
-                if let Some(name) = entry.file_name().to_str() {
-                    names.push(name.to_string());
-                }
-            }
-        }
-
-        Ok(names)
-    }
 
     /// Get storage directory path for this context
     /// Storage is always at context_dir/storage/

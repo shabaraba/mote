@@ -154,6 +154,10 @@ pub enum ContextCommands {
         /// If not specified, uses default: ~/.config/mote/projects/<project>/contexts/<name>
         #[arg(long)]
         context_dir: Option<PathBuf>,
+
+        /// Do not register this context in project config (for temporary contexts)
+        #[arg(long)]
+        no_register: bool,
     },
 
     /// Delete a context
