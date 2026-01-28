@@ -284,11 +284,28 @@ impl Cli {
                     "-d/--context-dir cannot be used with --config-dir".to_string(),
                 ));
             }
+            if self.project.is_some() {
+                return Err(MoteError::InvalidArguments(
+                    "-d/--context-dir cannot be used with -p/--project".to_string(),
+                ));
+            }
+            if self.old_context.is_some() {
+                return Err(MoteError::InvalidArguments(
+                    "-d/--context-dir cannot be used with --old-context".to_string(),
+                ));
+            }
         }
 
         // Parse context_spec
         if let Some(ref spec) = self.context_spec {
             if let Some(pos) = spec.find('/') {
+                // Check for multiple slashes
+                if spec.rfind('/') != Some(pos) {
+                    return Err(MoteError::InvalidArguments(
+                        "Invalid context specifier format. Use [project/]context".to_string(),
+                    ));
+                }
+
                 let project = spec[..pos].to_string();
                 let context = spec[pos + 1..].to_string();
 
