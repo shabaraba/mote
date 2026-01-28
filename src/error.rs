@@ -50,9 +50,6 @@ pub enum MoteError {
     #[error("Context not found: {0}")]
     ContextNotFound(String),
 
-    #[error("Project already exists: {0}")]
-    ProjectAlreadyExists(String),
-
     #[error("Context already exists: {0}")]
     ContextAlreadyExists(String),
 
