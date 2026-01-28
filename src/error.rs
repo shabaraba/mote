@@ -58,6 +58,9 @@ pub enum MoteError {
 
     #[error("Invalid name: {0}")]
     InvalidName(String),
+
+    #[error("Invalid arguments: {0}")]
+    InvalidArguments(String),
 }
 
 pub type Result<T> = std::result::Result<T, MoteError>;
