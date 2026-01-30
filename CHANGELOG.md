@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/shabaraba/mote/compare/v0.2.1...v0.2.2) (2026-01-30)
+
+
+### Bug Fixes
+
+* delete file when restoring non-existent file from snapshot ([#22](https://github.com/shabaraba/mote/issues/22)) ([629d60b](https://github.com/shabaraba/mote/commit/629d60b17df67115f7dde2a485b0cc57c2e51b1c))
+
 ## [0.2.1](https://github.com/shabaraba/mote/compare/v0.2.0...v0.2.1) (2026-01-28)
 
 
