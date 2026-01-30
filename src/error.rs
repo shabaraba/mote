@@ -20,9 +20,6 @@ pub enum MoteError {
     #[error("Ambiguous snapshot ID: {0}. Multiple matches found.")]
     AmbiguousSnapshotId(String),
 
-    #[error("File not found in snapshot: {0}")]
-    FileNotFoundInSnapshot(String),
-
     #[error("Object not found: {0}")]
     ObjectNotFound(String),
 

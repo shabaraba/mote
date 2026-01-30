@@ -59,26 +59,52 @@ fn restore_single_file(
     file_path: &str,
     dry_run: bool,
 ) -> Result<()> {
-    let file_entry = snapshot
-        .find_file(file_path)
-        .ok_or_else(|| MoteError::FileNotFoundInSnapshot(file_path.to_string()))?;
+    let dest = project_root.join(file_path);
 
-    let dest = project_root.join(&file_entry.path);
-
-    if dry_run {
-        println!(
-            "{} Would restore: {} ({} bytes)",
-            "dry-run".cyan().bold(),
-            file_entry.path,
-            file_entry.size
-        );
-    } else {
-        object_store.restore_file(&file_entry.hash, &dest)?;
-        println!(
-            "{} Restored: {}",
-            "✓".green().bold(),
-            file_entry.path.cyan()
-        );
+    match snapshot.find_file(file_path) {
+        Some(file_entry) => {
+            // File exists in snapshot - restore it
+            if dry_run {
+                println!(
+                    "{} Would restore: {} ({} bytes)",
+                    "dry-run".cyan().bold(),
+                    file_entry.path,
+                    file_entry.size
+                );
+            } else {
+                object_store.restore_file(&file_entry.hash, &dest)?;
+                println!(
+                    "{} Restored: {}",
+                    "✓".green().bold(),
+                    file_entry.path.cyan()
+                );
+            }
+        }
+        None => {
+            // File doesn't exist in snapshot - delete it if it exists
+            if dest.exists() {
+                if dry_run {
+                    println!(
+                        "{} Would delete: {} (not in snapshot)",
+                        "dry-run".cyan().bold(),
+                        file_path
+                    );
+                } else {
+                    std::fs::remove_file(&dest)?;
+                    println!(
+                        "{} Deleted: {} (not in snapshot)",
+                        "✓".green().bold(),
+                        file_path.cyan()
+                    );
+                }
+            } else {
+                println!(
+                    "{} File does not exist: {}",
+                    "info".blue().bold(),
+                    file_path
+                );
+            }
+        }
     }
     Ok(())
 }
