@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/shabaraba/mote/compare/v0.2.2...v0.2.3) (2026-01-30)
+
+
+### Bug Fixes
+
+* handle absolute paths in restore command ([#24](https://github.com/shabaraba/mote/issues/24)) ([5dbffbb](https://github.com/shabaraba/mote/commit/5dbffbb93f744c2ec0f3ecf393a86ba82bdfd37c))
+
 ## [0.2.2](https://github.com/shabaraba/mote/compare/v0.2.1...v0.2.2) (2026-01-30)
 
 
