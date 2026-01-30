@@ -59,9 +59,21 @@ fn restore_single_file(
     file_path: &str,
     dry_run: bool,
 ) -> Result<()> {
-    let dest = project_root.join(file_path);
+    // Convert absolute path to relative path if necessary
+    let file_path_buf = Path::new(file_path);
+    let relative_path = if file_path_buf.is_absolute() {
+        file_path_buf
+            .strip_prefix(project_root)
+            .unwrap_or(file_path_buf)
+            .to_string_lossy()
+            .to_string()
+    } else {
+        file_path.to_string()
+    };
 
-    match snapshot.find_file(file_path) {
+    let dest = project_root.join(&relative_path);
+
+    match snapshot.find_file(&relative_path) {
         Some(file_entry) => {
             // File exists in snapshot - restore it
             if dry_run {
