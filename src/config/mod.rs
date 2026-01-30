@@ -135,6 +135,8 @@ pub struct SnapshotConfig {
     pub max_snapshots: u32,
     #[serde(default = "default_max_age_days")]
     pub max_age_days: u32,
+    #[serde(default)]
+    pub auto_gc: bool,
 }
 
 fn default_true() -> bool {
@@ -155,6 +157,7 @@ impl Default for SnapshotConfig {
             auto_cleanup: default_true(),
             max_snapshots: default_max_snapshots(),
             max_age_days: default_max_age_days(),
+            auto_gc: false,
         }
     }
 }
