@@ -147,6 +147,12 @@ fn run() -> Result<()> {
                 force,
                 dry_run,
             }) => commands::cmd_restore(&ctx, &snapshot_id, file, force, dry_run),
+            Some(cli::SnapCommands::Delete { snapshot_id, force }) => {
+                commands::cmd_delete(&ctx, &snapshot_id, force)
+            }
+            Some(cli::SnapCommands::Gc { dry_run, verbose }) => {
+                commands::cmd_gc(&ctx, dry_run, verbose)
+            }
         },
         Commands::Project { command } => match command {
             cli::ProjectCommands::List => {

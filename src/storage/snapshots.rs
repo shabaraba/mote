@@ -141,7 +141,7 @@ impl SnapshotStore {
             let should_remove = i >= max_snapshots as usize || age_days > max_age_days as i64;
 
             if should_remove {
-                if let Err(e) = self.remove(&snapshot.id) {
+                if let Err(e) = self.delete(&snapshot.id) {
                     eprintln!(
                         "Warning: Failed to remove snapshot {}: {}",
                         snapshot.short_id(),
@@ -156,18 +156,23 @@ impl SnapshotStore {
         Ok(removed)
     }
 
-    fn remove(&self, id: &str) -> Result<()> {
+    pub fn delete(&self, id: &str) -> Result<()> {
         for entry in fs::read_dir(&self.snapshots_dir)? {
             let entry = entry?;
             let path = entry.path();
 
             if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
-                if filename.contains(&id[..8.min(id.len())]) {
-                    fs::remove_file(&path)?;
-                    return Ok(());
+                if let Some(hash_part) = filename
+                    .strip_suffix(".json")
+                    .and_then(|s| s.rsplit('_').next())
+                {
+                    if hash_part.starts_with(&id[..8.min(id.len())]) {
+                        fs::remove_file(&path)?;
+                        return Ok(());
+                    }
                 }
             }
         }
-        Ok(())
+        Err(MoteError::SnapshotNotFound(id.to_string()))
     }
 }

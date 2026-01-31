@@ -1,15 +1,19 @@
 mod collect;
+mod delete;
 mod diff;
+mod gc;
 mod restore;
 
 use colored::*;
 
 use crate::commands::CommandContext;
 use crate::error::{MoteError, Result};
-use crate::storage::{Index, ObjectStore, Snapshot, SnapshotStore, StorageLocation};
+use crate::storage::{check_auto_gc, run_auto_gc, Index, ObjectStore, Snapshot, SnapshotStore};
 use collect::{collect_files, have_same_file_hashes};
 
+pub use delete::cmd_delete;
 pub use diff::cmd_diff;
+pub use gc::cmd_gc;
 pub use restore::cmd_restore;
 
 pub fn cmd_snapshot(
@@ -18,12 +22,9 @@ pub fn cmd_snapshot(
     trigger: Option<String>,
     auto: bool,
 ) -> Result<()> {
-    let location = match StorageLocation::find_existing(ctx.project_root, ctx.storage_dir) {
+    let location = match ctx.resolve_location() {
         Ok(loc) => loc,
-        Err(MoteError::NotInitialized) if ctx.storage_dir.is_some() => {
-            StorageLocation::init(ctx.project_root, ctx.config, ctx.storage_dir)?
-        }
-        Err(_) if auto => return Ok(()),
+        Err(MoteError::NotInitialized) if auto => return Ok(()),
         Err(e) => return Err(e),
     };
     let object_store = ObjectStore::new(location.objects_dir());
@@ -81,17 +82,30 @@ pub fn cmd_snapshot(
         }
     }
 
+    if ctx.config.snapshot.gc_auto_enabled {
+        let gc_info = check_auto_gc(
+            &location.snapshots_dir(),
+            &location.objects_dir(),
+            ctx.config.snapshot.gc_auto,
+        )?;
+
+        if gc_info.should_run {
+            if let Some(stats) = run_auto_gc(&location.snapshots_dir(), &location.objects_dir())? {
+                if !auto {
+                    println!(
+                        "  Auto GC: cleaned {} unreferenced object(s)",
+                        stats.deleted_objects
+                    );
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 
 pub fn cmd_log(ctx: &CommandContext, limit: usize, oneline: bool) -> Result<()> {
-    let location = match StorageLocation::find_existing(ctx.project_root, ctx.storage_dir) {
-        Ok(loc) => loc,
-        Err(MoteError::NotInitialized) if ctx.storage_dir.is_some() => {
-            StorageLocation::init(ctx.project_root, ctx.config, ctx.storage_dir)?
-        }
-        Err(e) => return Err(e),
-    };
+    let location = ctx.resolve_location()?;
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
     let snapshots = snapshot_store.list()?;
 
@@ -129,13 +143,7 @@ pub fn cmd_log(ctx: &CommandContext, limit: usize, oneline: bool) -> Result<()> 
 }
 
 pub fn cmd_show(ctx: &CommandContext, snapshot_id: &str) -> Result<()> {
-    let location = match StorageLocation::find_existing(ctx.project_root, ctx.storage_dir) {
-        Ok(loc) => loc,
-        Err(MoteError::NotInitialized) if ctx.storage_dir.is_some() => {
-            StorageLocation::init(ctx.project_root, ctx.config, ctx.storage_dir)?
-        }
-        Err(e) => return Err(e),
-    };
+    let location = ctx.resolve_location()?;
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
     let snapshot = snapshot_store.find_by_id(snapshot_id)?;
 

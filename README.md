@@ -26,6 +26,7 @@ This independence means you can:
 - **🗂️ Smart Storage**: `.mote/` or `.git/mote/`—your choice
 - **🛡️ Safe Restoration**: Auto-backup before restore operations
 - **📁 Context Separation**: Multiple storage directories for organizing different workflows
+- **🗑️ Garbage Collection**: Manual and automatic cleanup of unreferenced objects (inspired by Git's gc.auto)
 
 ## Installation
 
@@ -84,6 +85,12 @@ mote snap restore <snapshot-id> --file src/main.rs
 
 # Restore entire snapshot
 mote snap restore <snapshot-id> --force
+
+# Delete old snapshots
+mote snap delete <snapshot-id>
+
+# Clean up unreferenced objects
+mote snap gc
 ```
 
 ## Global Options
@@ -212,6 +219,25 @@ mote snap restore abc123d --file src/main.rs   # Restore single file
 mote snap restore abc123d                       # Restore all (creates backup first)
 mote snap restore abc123d --force               # Force restore without backup
 mote snap restore abc123d --dry-run             # Preview what would be restored
+```
+
+#### `mote snap delete`
+
+Delete a snapshot.
+
+```bash
+mote snap delete abc123d           # Delete with confirmation prompt
+mote snap delete abc123d --force   # Delete without confirmation
+```
+
+#### `mote snap gc`
+
+Run garbage collection to remove unreferenced objects.
+
+```bash
+mote snap gc              # Clean up unreferenced objects
+mote snap gc --dry-run    # Preview what would be removed
+mote snap gc --verbose    # Show detailed progress
 ```
 
 ### Project Management
@@ -359,6 +385,8 @@ compression_level = 3
 auto_cleanup = true
 max_snapshots = 1000
 max_age_days = 30
+gc_auto_enabled = false  # Enable automatic garbage collection
+gc_auto = 100            # GC threshold (unreferenced objects count)
 
 [ignore]
 ignore_file = ".moteignore"
@@ -402,6 +430,56 @@ max_age_days = 7
 ```
 
 **Configuration priority**: Context > Project > Global
+
+## Garbage Collection
+
+mote uses content-addressable storage, which means deleting snapshots doesn't automatically free disk space. Use garbage collection to remove unreferenced objects.
+
+### Manual GC
+
+```bash
+# Check what would be removed
+mote snap gc --dry-run
+
+# Clean up unreferenced objects
+mote snap gc
+
+# With detailed progress
+mote snap gc --verbose
+```
+
+### Automatic GC (Inspired by Git)
+
+Like Git's `gc.auto`, mote can automatically run garbage collection when the number of unreferenced objects exceeds a threshold.
+
+**Configuration** (`~/.config/mote/config.toml` or context config):
+
+```toml
+[snapshot]
+gc_auto_enabled = true   # Enable automatic GC (default: false)
+gc_auto = 100            # Run GC when 100+ unreferenced objects (default: 100)
+```
+
+**Behavior:**
+- Automatically triggered during `mote snapshot` command
+- Checks unreferenced object count vs threshold
+- Runs GC silently if threshold exceeded
+- Similar to Git's `gc.auto=6700` (mote uses smaller default for typical use)
+
+**Example workflow:**
+```bash
+# Enable auto GC in config
+echo '[snapshot]
+gc_auto_enabled = true
+gc_auto = 50' >> ~/.config/mote/config.toml
+
+# Create and delete snapshots normally
+mote snap -m "work 1"
+mote snap delete <old-id> --force
+
+# Auto GC runs when threshold reached (no manual intervention needed)
+mote snap -m "work 2"
+```
 
 ## .moteignore
 

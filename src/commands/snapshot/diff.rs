@@ -9,7 +9,7 @@ use similar::{ChangeTag, TextDiff};
 use crate::commands::CommandContext;
 use crate::error::{MoteError, Result};
 use crate::ignore::IgnoreFilter;
-use crate::storage::{FileEntry, ObjectStore, Snapshot, SnapshotStore, StorageLocation};
+use crate::storage::{FileEntry, ObjectStore, Snapshot, SnapshotStore};
 
 pub fn cmd_diff(
     ctx: &CommandContext,
@@ -19,13 +19,7 @@ pub fn cmd_diff(
     output: Option<String>,
     unified: usize,
 ) -> Result<()> {
-    let location = match StorageLocation::find_existing(ctx.project_root, ctx.storage_dir) {
-        Ok(loc) => loc,
-        Err(MoteError::NotInitialized) if ctx.storage_dir.is_some() => {
-            StorageLocation::init(ctx.project_root, ctx.config, ctx.storage_dir)?
-        }
-        Err(e) => return Err(e),
-    };
+    let location = ctx.resolve_location()?;
     let snapshot_store = SnapshotStore::new(location.snapshots_dir());
     let object_store = ObjectStore::new(location.objects_dir());
 

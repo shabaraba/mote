@@ -204,6 +204,27 @@ pub enum SnapCommands {
         #[arg(long)]
         dry_run: bool,
     },
+
+    /// Delete a snapshot
+    Delete {
+        /// Snapshot ID to delete
+        snapshot_id: String,
+
+        /// Skip confirmation prompt
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Run garbage collection to remove unreferenced objects
+    Gc {
+        /// Show what would be removed without actually removing
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Show detailed progress information
+        #[arg(long)]
+        verbose: bool,
+    },
 }
 
 #[derive(Subcommand)]
