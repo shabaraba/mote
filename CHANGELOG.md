@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.4](https://github.com/shabaraba/mote/compare/v0.2.3...v0.2.4) (2026-01-31)
+
+
+### Features
+
+* add snapshot delete and garbage collection commands ([#26](https://github.com/shabaraba/mote/issues/26)) ([77345fe](https://github.com/shabaraba/mote/commit/77345fe67bf8b8077f4bb148511f3937dcfdd38d))
+
 ## [0.2.3](https://github.com/shabaraba/mote/compare/v0.2.2...v0.2.3) (2026-01-30)
 
 
