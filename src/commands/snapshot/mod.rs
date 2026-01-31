@@ -8,7 +8,7 @@ use colored::*;
 
 use crate::commands::CommandContext;
 use crate::error::{MoteError, Result};
-use crate::storage::{Index, ObjectStore, Snapshot, SnapshotStore};
+use crate::storage::{check_auto_gc, run_auto_gc, Index, ObjectStore, Snapshot, SnapshotStore};
 use collect::{collect_files, have_same_file_hashes};
 
 pub use delete::cmd_delete;
@@ -79,6 +79,25 @@ pub fn cmd_snapshot(
         )?;
         if removed > 0 && !auto {
             println!("  Cleaned up {} old snapshot(s)", removed);
+        }
+    }
+
+    if ctx.config.snapshot.gc_auto_enabled {
+        let gc_info = check_auto_gc(
+            &location.snapshots_dir(),
+            &location.objects_dir(),
+            ctx.config.snapshot.gc_auto,
+        )?;
+
+        if gc_info.should_run {
+            if let Some(stats) = run_auto_gc(&location.snapshots_dir(), &location.objects_dir())? {
+                if !auto {
+                    println!(
+                        "  Auto GC: cleaned {} unreferenced object(s)",
+                        stats.deleted_objects
+                    );
+                }
+            }
         }
     }
 

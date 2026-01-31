@@ -3,7 +3,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::error::Result;
-use crate::storage::Snapshot;
+use crate::storage::{Snapshot, SnapshotStore};
 
 pub struct ObjectReferences {
     refs: HashSet<String>,
@@ -34,6 +34,10 @@ impl ObjectReferences {
 pub struct GcStats {
     pub deleted_objects: usize,
     pub deleted_bytes: u64,
+}
+
+pub struct AutoGcInfo {
+    pub should_run: bool,
 }
 
 pub fn list_all_objects(objects_dir: &Path) -> Result<Vec<String>> {
@@ -114,4 +118,55 @@ pub fn delete_objects(
         deleted_objects,
         deleted_bytes,
     })
+}
+
+pub fn check_auto_gc(
+    snapshots_dir: &Path,
+    objects_dir: &Path,
+    threshold: usize,
+) -> Result<AutoGcInfo> {
+    let snapshot_store = SnapshotStore::new(snapshots_dir.to_path_buf());
+    let snapshots = snapshot_store.list()?;
+
+    let mut refs = ObjectReferences::new();
+    for snapshot in &snapshots {
+        refs.mark_from_snapshot(snapshot);
+    }
+
+    let all_objects = list_all_objects(objects_dir)?;
+
+    let unreferenced_count = all_objects
+        .iter()
+        .filter(|hash| !refs.is_referenced(hash))
+        .count();
+
+    let should_run = unreferenced_count >= threshold;
+
+    Ok(AutoGcInfo { should_run })
+}
+
+pub fn run_auto_gc(
+    snapshots_dir: &Path,
+    objects_dir: &Path,
+) -> Result<Option<GcStats>> {
+    let snapshot_store = SnapshotStore::new(snapshots_dir.to_path_buf());
+    let snapshots = snapshot_store.list()?;
+
+    let mut refs = ObjectReferences::new();
+    for snapshot in &snapshots {
+        refs.mark_from_snapshot(snapshot);
+    }
+
+    let all_objects = list_all_objects(objects_dir)?;
+    let unreferenced: Vec<String> = all_objects
+        .into_iter()
+        .filter(|hash| !refs.is_referenced(hash))
+        .collect();
+
+    if unreferenced.is_empty() {
+        return Ok(None);
+    }
+
+    let stats = delete_objects(objects_dir, &unreferenced, false)?;
+    Ok(Some(stats))
 }
